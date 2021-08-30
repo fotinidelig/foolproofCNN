@@ -1,4 +1,3 @@
-from typing import Optional, Callable
 from torch import nn
 import torch.nn.functional as F
 import torch
@@ -7,6 +6,7 @@ from .utils import BasicConv2D, BasicLinear
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 plt.rcParams["font.family"] = "serif"
@@ -57,7 +57,7 @@ class CWCIFAR10(nn.Module):
     def train(self, trainloader):
 
         lr = .01
-        lr_decay = 1 #set to 1 if not used
+        lr_decay = 1 #set to 1 for no effect
         epochs = 50
         momentum = .9
         batch_size = 128
