@@ -8,6 +8,8 @@ Original file is located at
 """
 
 ## Imports
+import argparse
+
 import numpy as np
 import os
 import random
@@ -28,6 +30,13 @@ import torch.nn.functional as F
 
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
+
+
+parser = argparse.ArgumentParser(description='Run model or/and attack on CIFAR10.')
+parser.add_argument('--pre-trained', dest='pretrained', action='store_const',
+                     const=True, default=False,
+                     help='use the pre-trained model stored in ./models/')
+args = parser.parse_args()
 
 ############
 ## GLOBAL ##
@@ -69,8 +78,9 @@ print("=> Using device: %s"%device)
 
 net = CWCIFAR10()
 net = net.to(device)
-PRETRAINED=False
-if PRETRAINED:
+
+if args.pretrained:
+    print("TRUE")
     print("\n=> Using pre trained model.")
     net.load_state_dict(torch.load("models/CWCIFAR10.pt"))
 else:
