@@ -1,3 +1,4 @@
+import os
 from torch import nn
 import torch.nn.functional as F
 import torch
@@ -66,11 +67,12 @@ class CWCIFAR10(nn.Module):
         self.train()
 
         def learning_curve(iters, losses, epoch, lr):
-            plt.plot(iters, losses)
+            plt.clf()
             plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
             plt.xlabel("Iterations")
             plt.ylabel("Loss")
-            plt.show()
+            plt.plot(iters, losses)
+            # plt.show()
             plt.savefig(f"training_plots/learning_{epoch}.png")
 
         optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum, nesterov = True)
@@ -101,7 +103,9 @@ class CWCIFAR10(nn.Module):
             if epoch%5 == 0:
                 learning_curve(iters, losses, epoch, cur_lr)
 
-        torch.save(model.state_dict(), "models/CWCIFAR10.pt")
+        if not os.path.isdir('models'):
+            os.makedirs('models')
+        torch.save(self.state_dict(), "models/CWCIFAR10.pt")
 
     def _test(self, testloader):
 

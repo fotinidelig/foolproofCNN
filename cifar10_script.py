@@ -87,31 +87,31 @@ with torch.no_grad():
 ## Attack ##
 ############
 
-CONST = .1 # minimization constance
-CONF = 0 # K defines the classification confidence
-
-N_SAMPLES = 100
-MAX_ITERATIONS = 10000
-
-classes = ('plane', 'car', 'bird', 'cat',
-           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-sampleloader = torch.utils.data.DataLoader(testset, batch_size=1,
-                                         shuffle=False, num_workers=NUM_WORKERS)
-
-# Load samples for the attack
-samples = []
-dataiter = iter(sampleloader)
-for i in range(N_SAMPLES):
-    data = dataiter.next()
-    data[0] = torch.reshape(data[0],(3,32,32))
-    data[1] = int(data[1][0])
-    samples.append(data)
-
-print("\n=> Running attack with %d samples"%N_SAMPLES)
-attack = L2Attack(CONST, CONF, MAX_ITERATIONS)
-
-## Use all classes as targets
-for target,_ in enumerate(classes, 0):
-    attack.attack(samples,[target for i in range(len(samples))])
-    attack.test(net)
+# CONST = .1 # minimization constance
+# CONF = 0 # K defines the classification confidence
+#
+# N_SAMPLES = 100
+# MAX_ITERATIONS = 10000
+#
+# classes = ('plane', 'car', 'bird', 'cat',
+#            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+#
+# sampleloader = torch.utils.data.DataLoader(testset, batch_size=1,
+#                                          shuffle=False, num_workers=NUM_WORKERS)
+#
+# # Load samples for the attack
+# samples = []
+# dataiter = iter(sampleloader)
+# for i in range(N_SAMPLES):
+#     data = dataiter.next()
+#     data[0] = torch.reshape(data[0],(3,32,32))
+#     data[1] = int(data[1][0])
+#     samples.append(data)
+#
+# print("\n=> Running attack with %d samples"%N_SAMPLES)
+# attack = L2Attack(CONST, CONF, MAX_ITERATIONS)
+#
+# ## Use all classes as targets
+# for target,_ in enumerate(classes, 0):
+#     attack.attack(samples,[target for i in range(len(samples))])
+#     attack.test(net)

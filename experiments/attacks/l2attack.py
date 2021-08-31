@@ -2,6 +2,8 @@ import torch
 import numpy as np
 from .utils import BaseAttack
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 class L2Attack(BaseAttack):
     def __init__(
         self,
@@ -25,7 +27,6 @@ class L2Attack(BaseAttack):
             targets = [targets]
 
         w = torch.zeros((3, 32, 32), dtype=float, device=device, requires_grad=True)
-        w = w.to(device)
         params = [{'params': w}]
         optimizer = torch.optim.Adam(params, lr=.01)
         adv_samples = []
