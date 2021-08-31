@@ -65,41 +65,53 @@ print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print("=> Using device: %s"%device)
 
 net = CWCIFAR10()
 net = net.to(device)
-print("=> Training...")
-start_time = time.time()
-net.train(trainloader)
-train_time = time.time() - start_time
-print("=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
-net.test(testloader)
+PRETRAINED=False
+if PRETRAINED:
+    print("\n=> Using pre trained model.")
+    net.load_state_dict(torch.load("models/CWCIFAR10.pt"))
+else:
+    print("\n=> Training...")
+    start_time = time.time()
+    net._train(trainloader)
+    train_time = time.time() - start_time
+    print("\n=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
+
+with torch.no_grad():
+    net._test(testloader)
 
 ############
 ## Attack ##
 ############
 
-# C_CONST = .1 # minimization constance
-# K_CONF = 0 # K defines the classification confidence
-# N_SAMPLES = 100
-# MAX_ITERATIONS = 10000
-# classes = ('plane', 'car', 'bird', 'cat',
-#            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-#
-# sampleloader = torch.utils.data.DataLoader(testset, batch_size=1,
-#                                          shuffle=False, num_workers=NUM_WORKERS)
-# # Load samples for the attack
-# samples = []
-# dataiter = iter(sampleloader)
-# for i in range(N_SAMPLES):
-#     data = dataiter.next()
-#     data[0] = torch.reshape(data[0],(3,32,32))
-#     data[1] = int(data[1][0])
-#     samples.append(data)
-#
-# print("=> Running attack with %d samples"%N_SAMPLES)
-# attack = L2Attack(C_CONST, K_CONF, 10000)
-# attack.attack(samples,[random.randint(0,9) for i in range(len(samples))])
-# attack.test(net)
-# attack.show_image(adversarial_samples[0],samples[0])
-# attack.show_image(adversarial_samples[1],samples[0])
+CONST = .1 # minimization constance
+CONF = 0 # K defines the classification confidence
+
+N_SAMPLES = 100
+MAX_ITERATIONS = 10000
+
+classes = ('plane', 'car', 'bird', 'cat',
+           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+sampleloader = torch.utils.data.DataLoader(testset, batch_size=1,
+                                         shuffle=False, num_workers=NUM_WORKERS)
+
+# Load samples for the attack
+samples = []
+dataiter = iter(sampleloader)
+for i in range(N_SAMPLES):
+    data = dataiter.next()
+    data[0] = torch.reshape(data[0],(3,32,32))
+    data[1] = int(data[1][0])
+    samples.append(data)
+
+print("\n=> Running attack with %d samples"%N_SAMPLES)
+attack = L2Attack(CONST, CONF, MAX_ITERATIONS)
+
+## Use all classes as targets
+for target,_ in enumerate(classes, 0):
+    attack.attack(samples,[target for i in range(len(samples))])
+    attack.test(net)
