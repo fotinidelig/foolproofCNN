@@ -29,7 +29,7 @@ class CWCIFAR10(nn.Module):
         self.fc3 = BasicLinear(256,10)
 
         self.batch_size = 128
-        print(self)
+        print("\n", self)
 
 
     def forward(self, x, only_logits = False):
@@ -43,24 +43,27 @@ class CWCIFAR10(nn.Module):
         x = self.mp(x)
         N, C, W, H = (*(x.shape),)
         x = torch.reshape(x, (N, C*W*H))
-        x = F.dropout(x, p = .5)
+        # x = F.dropout(x, p = .5)
         x = self.fc1(x)
         x = F.dropout(x, p = .5)
         x = self.fc2(x)
-        x = self.fc3(x) # logits layer
-        y_hat = F.softmax(x, dim=1) # final prediction
-        if only_logits:
-            return x # for attacks
-        return y_hat
+        logits = self.fc3(x) # logits layer
+
+        # Don't use softmax layer since it is incorportaed in torch.nn.CrossEntropyLoss()
+
+        return logits
 
 
-    def train(self, trainloader):
+    def _train(self, trainloader):
 
         lr = .01
         lr_decay = 1 #set to 1 if not used
         epochs = 50
         momentum = .9
         batch_size = 128
+
+        # turn on training mode, necessary for dropout layers
+        self.train()
 
         def learning_curve(iters, losses, epoch, lr):
             plt.plot(iters, losses)
@@ -88,7 +91,7 @@ class CWCIFAR10(nn.Module):
                 loss.backward()
                 optimizer.step()
                 iters.append(i)
-                losses.append(float(loss)/self.batch_size)
+                losses.append(float(loss.item()))
                 acc_loss+=float(loss)
             epoch_time = time.time()-start_time
             cur_lr = optimizer.param_groups[0]["lr"]
@@ -98,8 +101,12 @@ class CWCIFAR10(nn.Module):
             if epoch%5 == 0:
                 learning_curve(iters, losses, epoch, cur_lr)
 
+        torch.save(model.state_dict(), "models/CWCIFAR10.pt")
 
-    def test(self, testloader):
+    def _test(self, testloader):
+
+        # turn on evaluation mode, aka don't use dropout
+        self.eval()
 
         accuracy = 0
         for i, (samples, targets) in enumerate(testloader, 0):
