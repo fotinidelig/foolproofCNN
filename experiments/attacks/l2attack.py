@@ -52,7 +52,7 @@ class L2Attack(BaseAttack):
                     loss.backward()
                     optimizer.step()
                 delta = .5*(torch.tanh(w)-1)
-                self.const, end_iters = bin_search_const(self.const, fx) # update const for next iteration
+                self.const, end_iters = self.bin_search_const(self.const, fx) # update const for next iteration
                 if fx <= 0:
                     found_atck = True
                     best_atck = copy.deepcopy(sample+delta)
