@@ -94,7 +94,10 @@ class L2Attack(BaseAttack):
         pl1=ax1.imshow(np.transpose(npimgs[0], (1, 2, 0)))
         ax2.set_title("Perturbed: Class %s"%classes[target])
         pl2=ax2.imshow(np.transpose(npimgs[1], (1, 2, 0)))
-        plt.savefig("advset/sample_%d.png"%idx)
+
+        if not os.path.isdir('advimages'):
+            os.makedirs('advimages')
+        plt.savefig("advimages/sample_%d.png"%idx)
 
     def test(net):
         print("=> Testing success of attack")
