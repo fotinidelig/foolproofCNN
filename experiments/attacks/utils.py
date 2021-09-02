@@ -36,10 +36,10 @@ class BaseAttack():
                 end_iters = True
             else:
                 self.min_const = const
-                const = .5(self.max_const+self.min_const)
+                const = .5*(self.max_const+self.min_const)
         if fx <= 0:
             self.max_const = const
-            const = .5(self.max_const+self.min_const)
+            const = .5*(self.max_const+self.min_const)
         return const, end_iters
 
     def attack(self, samples, targets):

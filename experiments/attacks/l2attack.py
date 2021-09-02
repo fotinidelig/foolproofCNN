@@ -1,5 +1,7 @@
 import torch
+import matplotlib as plt
 import numpy as np
+from copy import deepcopy
 from typing import Optional
 from .utils import BaseAttack
 
@@ -53,7 +55,7 @@ class L2Attack(BaseAttack):
                 for i in range(self.iterations):
                     optimizer.zero_grad() # always do zero_grad() before optimization
                     adv_sample = sample + w
-                    logits = net.forward(adv_sample.float()) # net weights and input must be same dtype, aka float32
+                    logits = net.forward(adv_sample.float())[0] # net weights and input must be same dtype, aka float32
                     loss, fx = self.loss(w,adv_sample,logits,target)
                     loss.backward()
                     optimizer.step()
@@ -62,7 +64,7 @@ class L2Attack(BaseAttack):
                 prev_fx = fx
                 if fx <= 0:
                     found_atck = True
-                    best_atck = copy.deepcopy(sample+delta)
+                    best_atck = deepcopy((sample+delta).data) # can't copy non-leaf tensors
                     best_const = self.const
                     best_fx = fx
                 if end_iters:
