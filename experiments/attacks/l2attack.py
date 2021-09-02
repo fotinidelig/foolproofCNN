@@ -28,7 +28,7 @@ class L2Attack(BaseAttack):
         l = ((1/2*(torch.tanh(w)-1)-x)**2).sum() + self.const*obj
         return l, fx
 
-    def attack(self, samples, targets):
+    def attack(self, net, samples, targets):
         if not isinstance(samples, list):
             samples = [samples]
         if not isinstance(targets, list):

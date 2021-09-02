@@ -122,7 +122,7 @@ print("\n=> Running attack with %d samples"%N_SAMPLES)
 attack = L2Attack(CONST, CONF, MAX_ITERATIONS)
 
 target = 1 # target class
-attack.attack(samples,[target for i in range(len(samples))])
+attack.attack(net, samples,[target for i in range(len(samples))])
 
 with torch.no_grad():
     attack.test(net)
