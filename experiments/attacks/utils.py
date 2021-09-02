@@ -22,7 +22,7 @@ class BaseAttack():
     def loss(self, w, x, **kwargs):
         raise NotImplementedError
 
-    def bin_search_const(self, const, fx, best_fx):
+    def bin_search_const(self, const, fx, prev_fx):
         """
             Binary search for const in range
             [min_const, max_const].
@@ -37,7 +37,7 @@ class BaseAttack():
         if fx <= 0:
             self.max_const = const
             const = .5(self.max_const+self.min_const)
-        if fx*best_fx <= 0: # const found in previous iteration
+        if fx*prev_fx <= 0: # const found in previous iteration
             end_iters = True
         return const, end_iters
 
