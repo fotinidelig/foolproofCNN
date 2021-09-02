@@ -40,7 +40,7 @@ class L2Attack(BaseAttack):
         adv_samples = []
 
         bin_steps = 9
-        for (sample, label), target in zip(samples, targets):
+        for idx, (sample, label), target in enumerate(zip(samples, targets), 0):
             found_atck = False
             for iteration in range(bin_steps):
                 optimizer.zero_grad() # always do zero_grad() before optimization
@@ -60,6 +60,7 @@ class L2Attack(BaseAttack):
                 if end_iters:
                     break
             if found_atck:
+                self.show_image(idx, best_atck, sample)
                 print("=> Found attack with CONST = %.3f."%self.best_const)
                 adv_samples.append(best_atck.float())
             else:
@@ -68,7 +69,8 @@ class L2Attack(BaseAttack):
         adv_dataset = torch.utils.data.TensorDataset(torch.stack(adv_samples), torch.tensor(targets))
         self.advset = adv_dataset
 
-    def show_image(self, adv_img ,img = None):
+    def show_image(self, idx, adv_img ,img = None):
+        plt.clf()
         fig, (ax1,ax2) = plt.subplots(nrows=1,ncols=2)
 
         # first load images to cpu and detach
@@ -81,6 +83,7 @@ class L2Attack(BaseAttack):
         pl1=ax1.imshow(np.transpose(npimgs[0], (1, 2, 0)))
         ax2.set_title("Perturbed: Class %s"%classes[target])
         pl2=ax2.imshow(np.transpose(npimgs[1], (1, 2, 0)))
+        plt.savefig("sample_%d.png"%idx)
 
     def test(net):
         print("=> Testing success of attack")
