@@ -80,7 +80,7 @@ net = CWCIFAR10()
 net = net.to(device)
 
 if args.pretrained:
-    print("\n=> Using pre trained model.")
+    print("\n=> Using pretrained model.")
     net.load_state_dict(torch.load("models/CWCIFAR10.pt"))
 else:
     print("\n=> Training...")

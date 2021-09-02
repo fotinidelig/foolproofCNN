@@ -40,7 +40,7 @@ class L2Attack(BaseAttack):
         adv_samples = []
 
         bin_steps = 9
-        for idx, (sample, label), target in enumerate(zip(samples, targets), 0):
+        for idx, ((sample, label), target) in enumerate(zip(samples, targets), 0):
             found_atck = False
             for iteration in range(bin_steps):
                 optimizer.zero_grad() # always do zero_grad() before optimization
@@ -83,7 +83,7 @@ class L2Attack(BaseAttack):
         pl1=ax1.imshow(np.transpose(npimgs[0], (1, 2, 0)))
         ax2.set_title("Perturbed: Class %s"%classes[target])
         pl2=ax2.imshow(np.transpose(npimgs[1], (1, 2, 0)))
-        plt.savefig("sample_%d.png"%idx)
+        plt.savefig("advset/sample_%d.png"%idx)
 
     def test(net):
         print("=> Testing success of attack")
