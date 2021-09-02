@@ -1,9 +1,10 @@
 import torch
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import numpy as np
 from copy import deepcopy
 from typing import Optional
 from .utils import BaseAttack
+import time as tm
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 ID = torch.cuda.current_device()
@@ -47,6 +48,8 @@ class L2Attack(BaseAttack):
         adv_samples = []
 
         for idx, ((sample, label), target) in enumerate(zip(samples, targets), 0):
+            start_time = t.time()
+
             found_atck = False
             prev_fx = 1 # random value > 0 for initialization
             sample = sample.to(device)
@@ -76,6 +79,8 @@ class L2Attack(BaseAttack):
                 adv_samples.append(best_atck.float())
             else:
                 print("=> Didn't find attack.")
+            total_time = t.time()-start_time
+            print("=> Attack took %f mins"%(total_time/60))
 
         adv_dataset = torch.utils.data.TensorDataset(torch.stack(adv_samples), torch.tensor(targets))
         self.advset = adv_dataset
