@@ -33,7 +33,7 @@ class CWCIFAR10(nn.Module):
         print("\n", self)
 
 
-    def forward(self, x, only_logits = False):
+    def forward(self, x):
         if len(x.shape) == 3:
             x = torch.reshape(x,(1,*(x.shape))) # convolution input must be 4-dimensional
         x = self.conv11(x)
@@ -50,7 +50,7 @@ class CWCIFAR10(nn.Module):
         x = self.fc2(x)
         logits = self.fc3(x) # logits layer
 
-        # Don't use softmax layer since it is incorportaed in torch.nn.CrossEntropyLoss()
+        # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
 
         return logits
 

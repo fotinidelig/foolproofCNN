@@ -4,6 +4,8 @@ from typing import Optional
 from .utils import BaseAttack
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+ID = torch.cuda.current_device()
+print("=> CUDA ID: %d"%ID)
 
 class L2Attack(BaseAttack):
     def __init__(
@@ -34,21 +36,24 @@ class L2Attack(BaseAttack):
         if not isinstance(targets, list):
             targets = [targets]
 
+        bin_steps = 9
+        lr = .01
+
         w = torch.zeros((3, 32, 32), dtype=float, device=device, requires_grad=True)
         params = [{'params': w}]
-        optimizer = torch.optim.Adam(params, lr=.01)
+        optimizer = torch.optim.Adam(params, lr=lr)
         adv_samples = []
 
-        bin_steps = 9
         for idx, ((sample, label), target) in enumerate(zip(samples, targets), 0):
             found_atck = False
             prev_fx = 1 # random value > 0 for initialization
+            sample = sample.to(device)
+            print("=> CUDA memory allocated (in bytes): %d"%torch.cuda.memory_allocated(ID))
             for iteration in range(bin_steps):
-                optimizer.zero_grad() # always do zero_grad() before optimization
                 for i in range(self.iterations):
-                    sample = sample.to(device)
+                    optimizer.zero_grad() # always do zero_grad() before optimization
                     adv_sample = sample + w
-                    logits = net.forward(adv_sample.float(), only_logits=True)[0] # net weights and input must be same dtype, aka float32
+                    logits = net.forward(adv_sample.float()) # net weights and input must be same dtype, aka float32
                     loss, fx = self.loss(w,adv_sample,logits,target)
                     loss.backward()
                     optimizer.step()
