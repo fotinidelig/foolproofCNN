@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from typing import Optional
 from .utils import BaseAttack
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -8,17 +9,24 @@ class L2Attack(BaseAttack):
     def __init__(
         self,
         const,
-        conf,
-        iterations
+        conf: Optional[int] = 0,
+        iterations: Optional[int] = 10000,
+        max_const: Optional[float] = 1e10,
+        min_const: Optional[float] = 1e-3,
     ):
-        super(L2Attack, self).__init__(const, conf, iterations)
+        super(L2Attack, self).__init__(const, conf, iterations, max_const, min_const)
 
     def loss(self, w, x, logits, target):
+        """
+            Implementing the f_6 objective function,
+            refer to the corresponding C&W paper
+        """
         f_i = max([logits[i] for i in range(len(logits)) if i != target])
         f_t =  logits[target]
+        fx = f_i - f_t + self.conf
         obj = max([f_i-f_t, -1*self.conf])
         l = ((1/2*(torch.tanh(w)-1)-x)**2).sum() + self.const*obj
-        return l
+        return l, fx
 
     def attack(self, samples, targets):
         if not isinstance(samples, list):
@@ -31,19 +39,31 @@ class L2Attack(BaseAttack):
         optimizer = torch.optim.Adam(params, lr=.01)
         adv_samples = []
 
+        bin_steps = 9
         for (sample, label), target in zip(samples, targets):
-            optimizer.zero_grad() # always do zero_grad() before optimization
-            for i in range(self.iterations):
-                sample = sample.to(device)
-                adv_sample = sample + w
-                logits = net.forward(adv_sample.float(), only_logits=True)[0] # net weights and input must be same dtype, aka float32
-                loss = self.loss(w,adv_sample,logits,target)
-                loss.backward()
-                optimizer.step()
-            delta = .5*(torch.tanh(w)-1)
-            adv_sample = sample+delta
-            self.show_image(sample, adv_sample)
-            adv_samples.append(adv_sample.float())
+            found_atck = False
+            for iteration in range(bin_steps):
+                optimizer.zero_grad() # always do zero_grad() before optimization
+                for i in range(self.iterations):
+                    sample = sample.to(device)
+                    adv_sample = sample + w
+                    logits = net.forward(adv_sample.float(), only_logits=True)[0] # net weights and input must be same dtype, aka float32
+                    loss, fx = self.loss(w,adv_sample,logits,target)
+                    loss.backward()
+                    optimizer.step()
+                delta = .5*(torch.tanh(w)-1)
+                self.const, end_iters = bin_search_const(self.const, fx) # update const for next iteration
+                if fx <= 0:
+                    found_atck = True
+                    best_atck = copy.deepcopy(sample+delta)
+                    best_const = self.const
+                if end_iters:
+                    break
+            if found_atck:
+                print("=> Found attack with CONST = %.3f."%self.best_const)
+                adv_samples.append(best_atck.float())
+            else:
+                print("=> Didn't find attack.")
 
         adv_dataset = torch.utils.data.TensorDataset(torch.stack(adv_samples), torch.tensor(targets))
         self.advset = adv_dataset
