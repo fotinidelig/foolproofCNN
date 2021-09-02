@@ -42,6 +42,7 @@ class L2Attack(BaseAttack):
         bin_steps = 9
         for idx, ((sample, label), target) in enumerate(zip(samples, targets), 0):
             found_atck = False
+            prev_fx = 1 # random value > 0 for initialization
             for iteration in range(bin_steps):
                 optimizer.zero_grad() # always do zero_grad() before optimization
                 for i in range(self.iterations):

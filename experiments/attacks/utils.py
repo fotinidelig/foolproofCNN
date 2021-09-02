@@ -32,13 +32,14 @@ class BaseAttack():
         """
         end_iters = False
         if fx > 0:
-            self.min_const = const
-            const = .5(self.max_const+self.min_const)
+            if prev_fx <= 0: # const found in previous iteration
+                end_iters = True
+            else:
+                self.min_const = const
+                const = .5(self.max_const+self.min_const)
         if fx <= 0:
             self.max_const = const
             const = .5(self.max_const+self.min_const)
-        if fx*prev_fx <= 0: # const found in previous iteration
-            end_iters = True
         return const, end_iters
 
     def attack(self, samples, targets):
