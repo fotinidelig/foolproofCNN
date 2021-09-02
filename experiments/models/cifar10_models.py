@@ -105,7 +105,7 @@ class CWCIFAR10(nn.Module):
 
         if not os.path.isdir('models'):
             os.makedirs('models')
-        torch.save(self.state_dict(), "models/CWCIFAR10.pt")
+        torch.save(self.state_dict(), "../pretrained/CWCIFAR10.pt")
 
     def _test(self, testloader):
 
