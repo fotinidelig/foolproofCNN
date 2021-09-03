@@ -18,8 +18,8 @@ classes = ('plane', 'car', 'bird', 'cat',
 BOXMIN = -.5
 BOXMAX = .5
 # calculations to constrain tanh() within [BOXMIN, BOXMAX]
-TO_MUL = .5(BOXMAX - BOXMIN)
-TO_ADD = .5(BOXMAX + BOXMIN)
+TO_MUL = .5*(BOXMAX - BOXMIN)
+TO_ADD = .5*(BOXMAX + BOXMIN)
 
 class L2Attack(BaseAttack):
     def __init__(
@@ -41,7 +41,7 @@ class L2Attack(BaseAttack):
         f_t =  logits[target]
         fx = f_i - f_t + self.conf # inner objective value
         obj = max([fx, 0])
-        l = ((TO_MUL*torch.tanh(w)+TO_ADD)-input)**2).sum() + self.const*obj
+        l = ((TO_MUL*torch.tanh(w)+TO_ADD-input)**2).sum() + self.const*obj
         return l, fx
 
     def attack(self, net, samples, targets):
@@ -64,16 +64,18 @@ class L2Attack(BaseAttack):
             found_atck = False # true if an attack x + δ has been found
             prev_fx = 1 # random value > 0 for initialization
             input = input.to(device)
-            print("=> CUDA memory allocated (in bytes): %d"%torch.cuda.memory_allocated(ID))
+            print("=> CUDA memory cached (in bytes): %d"%torch.cuda.memory_cached(ID))
+            print(torch.cuda.memory_stats())
             for iteration in range(bin_steps):
                 for i in range(self.iterations):
-                    optimizer.zero_grad() # always do zero_grad() before optimization
-                    adv_sample = TO_MUL*tanh(w)+TO_ADD
+                    adv_sample = TO_MUL*torch.tanh(w)+TO_ADD
                     logits = net.forward(adv_sample.float())[0] # net weights and input must be same dtype, aka float32
+                    print(logits.device, target.device)
                     loss, fx = self.loss(w,input,logits,target)
                     loss.backward()
                     optimizer.step()
-                l2 = adv_sample - input
+                    optimizer.zero_grad() # always do zero_grad() after step()
+                l2 = torch.norm(adv_sample - input)
                 self.const, end_iters = self.bin_search_const(self.const, fx, prev_fx) # update const for next iteration
                 prev_fx = fx
                 if fx <= 0:
@@ -83,11 +85,11 @@ class L2Attack(BaseAttack):
                     best_fx = fx
                     best_l2 = l2
                 if end_iters:
-                    print(best_fx <= 0)
                     break
             if found_atck:
                 self.show_image(idx, (best_atck, target), (input, label))
-                print("=> Found attack with CONST = %.3f. and L2 = %.4f"%(best_const, best_l2))
+                input_l2 = torch.norm(input)
+                print("=> Found attack with CONST = %.3f. and L2 = %.4f"%(best_const, best_l2/input_l2*100),"%")
                 adv_samples.append(best_atck.float())
             else:
                 print("=> Didn't find attack.")

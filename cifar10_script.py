@@ -118,10 +118,11 @@ for i in range(N_SAMPLES):
     samples.append(data)
 
 # sampleset = torch.utils.data.Dataset(samples, batch_size=20, shuffle=True, num_workers=NUM_WORKERS)
+samples = torch.tensor(samples).to(device)
 print("\n=> Running attack with %d samples"%N_SAMPLES)
-attack = L2Attack(CONST, CONF, MAX_ITERATIONS)
+attack = L2Attack(CONST, CONF, MAX_ITERATIONS).to(device)
 
-target = 1 # target class
+target = 2 # target class
 attack.attack(net, samples,[target for i in range(len(samples))])
 
 with torch.no_grad():

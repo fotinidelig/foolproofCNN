@@ -85,13 +85,13 @@ class CWCIFAR10(nn.Module):
             acc_loss = 0
             start_time = time.time()
             for i, batch in enumerate(trainloader, 0):
-                optimizer.zero_grad()
                 data = batch[0].to(device)
                 targets = batch[1].to(device)
                 pred = self.forward(data)
                 loss = criterion(pred, targets)
                 loss.backward()
                 optimizer.step()
+                optimizer.zero_grad()
                 iters.append(i)
                 losses.append(float(loss.item()))
                 acc_loss+=float(loss)
@@ -105,7 +105,7 @@ class CWCIFAR10(nn.Module):
 
         if not os.path.isdir('models'):
             os.makedirs('models')
-        torch.save(self.state_dict(), "../pretrained/CWCIFAR10.pt")
+        torch.save(self.state_dict(), "pretrained/CWCIFAR10.pt")
 
     def _test(self, testloader):
 
