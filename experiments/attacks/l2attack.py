@@ -1,3 +1,4 @@
+import os
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,6 +11,16 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 ID = torch.cuda.current_device()
 print("=> CUDA ID: %d"%ID)
 
+classes = ('plane', 'car', 'bird', 'cat',
+           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+# Constraints for image pixel values
+BOXMIN = -.5
+BOXMAX = .5
+# calculations to constrain tanh() within [BOXMIN, BOXMAX]
+TO_MUL = .5(BOXMAX - BOXMIN)
+TO_ADD = .5(BOXMAX + BOXMIN)
+
 class L2Attack(BaseAttack):
     def __init__(
         self,
@@ -21,16 +32,16 @@ class L2Attack(BaseAttack):
     ):
         super(L2Attack, self).__init__(const, conf, iterations, max_const, min_const)
 
-    def loss(self, w, x, logits, target):
+    def loss(self, w, input, logits, target):
         """
-            Implementing the f_6 objective function,
-            refer to the corresponding C&W paper
+            Calculating the loss with f_6 objective function,
+            refer to the paper for details
         """
         f_i = max([logits[i] for i in range(len(logits)) if i != target])
         f_t =  logits[target]
-        fx = f_i - f_t + self.conf
-        obj = max([f_i-f_t, -1*self.conf])
-        l = ((1/2*(torch.tanh(w)-1)-x)**2).sum() + self.const*obj
+        fx = f_i - f_t + self.conf # inner objective value
+        obj = max([fx, 0])
+        l = ((TO_MUL*torch.tanh(w)+TO_ADD)-input)**2).sum() + self.const*obj
         return l, fx
 
     def attack(self, net, samples, targets):
@@ -47,39 +58,40 @@ class L2Attack(BaseAttack):
         optimizer = torch.optim.Adam(params, lr=lr)
         adv_samples = []
 
-        for idx, ((sample, label), target) in enumerate(zip(samples, targets), 0):
-            start_time = t.time()
+        for idx, ((input, label), target) in enumerate(zip(samples, targets), 0):
+            start_time = tm.time()
 
-            found_atck = False
+            found_atck = False # true if an attack x + δ has been found
             prev_fx = 1 # random value > 0 for initialization
-            sample = sample.to(device)
+            input = input.to(device)
             print("=> CUDA memory allocated (in bytes): %d"%torch.cuda.memory_allocated(ID))
             for iteration in range(bin_steps):
                 for i in range(self.iterations):
                     optimizer.zero_grad() # always do zero_grad() before optimization
-                    adv_sample = sample + w
+                    adv_sample = TO_MUL*tanh(w)+TO_ADD
                     logits = net.forward(adv_sample.float())[0] # net weights and input must be same dtype, aka float32
-                    loss, fx = self.loss(w,adv_sample,logits,target)
+                    loss, fx = self.loss(w,input,logits,target)
                     loss.backward()
                     optimizer.step()
-                delta = .5*(torch.tanh(w)-1)
+                l2 = adv_sample - input
                 self.const, end_iters = self.bin_search_const(self.const, fx, prev_fx) # update const for next iteration
                 prev_fx = fx
                 if fx <= 0:
                     found_atck = True
-                    best_atck = deepcopy((sample+delta).data) # can't copy non-leaf tensors
+                    best_atck = deepcopy((input+l2).data) # can't copy non-leaf tensors
                     best_const = self.const
                     best_fx = fx
+                    best_l2 = l2
                 if end_iters:
                     print(best_fx <= 0)
                     break
             if found_atck:
-                self.show_image(idx, best_atck, sample)
-                print("=> Found attack with CONST = %.3f."%self.best_const)
+                self.show_image(idx, (best_atck, target), (input, label))
+                print("=> Found attack with CONST = %.3f. and L2 = %.4f"%(best_const, best_l2))
                 adv_samples.append(best_atck.float())
             else:
                 print("=> Didn't find attack.")
-            total_time = t.time()-start_time
+            total_time = tm.time()-start_time
             print("=> Attack took %f mins"%(total_time/60))
 
         adv_dataset = torch.utils.data.TensorDataset(torch.stack(adv_samples), torch.tensor(targets))
@@ -92,9 +104,11 @@ class L2Attack(BaseAttack):
         # first load images to cpu and detach
         adv_img, target = adv_img
         img, label = img
+
         images = list(map(lambda x: x.cpu().detach(), [img, adv_img]))
-        images = list(map(lambda x: x/2+.5, images))
+        images = list(map(lambda x: x/2+.5, images)) # un-normalize
         npimgs = list(map(lambda x: x.numpy(), images))
+
         ax1.set_title("Original: Class %s"%classes[label])
         pl1=ax1.imshow(np.transpose(npimgs[0], (1, 2, 0)))
         ax2.set_title("Perturbed: Class %s"%classes[target])

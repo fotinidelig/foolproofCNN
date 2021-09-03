@@ -81,7 +81,7 @@ net = net.to(device)
 
 if args.pretrained:
     print("\n=> Using pretrained model.")
-    net.load_state_dict(torch.load("models/CWCIFAR10.pt"))
+    net.load_state_dict(torch.load("pretrained/CWCIFAR10.pt"))
 else:
     print("\n=> Training...")
     start_time = time.time()

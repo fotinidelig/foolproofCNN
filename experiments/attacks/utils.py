@@ -19,7 +19,7 @@ class BaseAttack():
         self.max_const = max_const
         self.min_const = min_const
 
-    def loss(self, w, x, **kwargs):
+    def loss(self, w, input, **kwargs):
         raise NotImplementedError
 
     def bin_search_const(self, const, fx, prev_fx):
