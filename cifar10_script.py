@@ -96,7 +96,7 @@ with torch.no_grad():
 ## Attack ##
 ############
 
-CONST = 1 # initial minimization constance
+CONST = 0.01 # initial minimization constance
 CONF = 0 # defines the classification confidence
 
 N_SAMPLES = 100
@@ -118,10 +118,10 @@ for i in range(N_SAMPLES):
     samples.append(data)
 
 # sampleset = torch.utils.data.Dataset(samples, batch_size=20, shuffle=True, num_workers=NUM_WORKERS)
-samples = torch.tensor(samples).to(device)
 print("\n=> Running attack with %d samples"%N_SAMPLES)
-attack = L2Attack(CONST, CONF, MAX_ITERATIONS).to(device)
+attack = L2Attack(CONST, CONF, MAX_ITERATIONS)
 
+torch.cuda.empty_cache() # empty cache before attack
 target = 2 # target class
 attack.attack(net, samples,[target for i in range(len(samples))])
 
