@@ -39,9 +39,9 @@ class L2Attack(BaseAttack):
         """
         f_i = max([logits[i] for i in range(len(logits)) if i != target])
         f_t =  logits[target]
-        fx = f_i - f_t + self.conf # inner objective value
+        fx = f_i - f_t + self.conf
         obj = max([fx, 0])
-        l = ((TO_MUL*torch.tanh(w)+TO_ADD-input)**2).sum() + self.const*obj
+        l = torch.norm(TO_MUL*torch.tanh(w)+TO_ADD-input)**2 + self.const*obj
         return l, fx
 
     # TODO: check effect of discretization
@@ -57,7 +57,7 @@ class L2Attack(BaseAttack):
         if not isinstance(targets, list):
             targets = [targets]
 
-        bin_steps = 13
+        bin_steps = 10
         lr = .01
 
         w = torch.zeros((3, 32, 32), dtype=float, device=device, requires_grad=True)
@@ -71,7 +71,7 @@ class L2Attack(BaseAttack):
             label = torch.tensor(label).to(device)
             start_time = tm.time()
 
-            found_atck = False # true if an attack x + δ has been found
+            found_atck = False # important initialisation
             for iteration in range(bin_steps):
                 for i in range(self.iterations):
                     adv_sample = TO_MUL*torch.tanh(w)+TO_ADD
@@ -80,22 +80,20 @@ class L2Attack(BaseAttack):
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad() # always do zero_grad() after step()
-                l2 = torch.norm(adv_sample - input)
                 self.const = self.bin_search_const(self.const, fx) # update const for next iteration
                 if fx <= 0:
                     found_atck = True
-                    best_atck = deepcopy((input+l2).data) # can't copy non-leaf tensors
+                    best_atck = deepcopy(adv_sample.float().data) # can't copy non-leaf tensors
                     best_const = self.const
-                    best_fx = fx
-                    best_l2 = l2
+                    best_l2 = torch.norm(adv_sample - input)
             total_time = tm.time()-start_time
             print("=> Attack took %f mins"%(total_time/60))
             if found_atck:
-                print(best_atck.max(), best_atck.min())
-                self.show_image(idx, (best_atck, target), (input, label))
                 input_l2 = torch.norm(input)
                 print("=> Found attack with CONST = %.3f. and L2 = %.4f"%(best_const, best_l2/input_l2*100),"%")
-                adv_samples.append(best_atck.float())
+                print(best_atck.max(), best_atck.min())
+                self.show_image(idx, (best_atck, target), (input, label))
+                adv_samples.append()
             else:
                 print("=> Didn't find attack.")
 
@@ -106,14 +104,13 @@ class L2Attack(BaseAttack):
         plt.clf()
         fig, (ax1,ax2) = plt.subplots(nrows=1,ncols=2)
 
-        # first load images to cpu and detach
         adv_img, target = adv_img
         img, label = img
 
         images = list(map(lambda x: x.cpu().detach(), [img, adv_img]))
         images = list(map(lambda x: x*.5+.5, images)) # un-normalize
         npimgs = list(map(lambda x: x.numpy(), images))
-        npimgs = list(map(lambda x: np.round(x*255).astype(int), images))
+        npimgs = list(map(lambda x: np.round(x*255).astype(int), npimgs))
 
         ax1.set_title("Original: Class %s"%classes[label])
         pl1=ax1.imshow(np.transpose(npimgs[0], (1, 2, 0)))
