@@ -49,24 +49,18 @@ BATCH_SIZE = 128
 ## Load Dataset ##
 ##################
 
-transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5)),])
-
 trainset = ExtendedCIFAR10(root='./data', train=True,
-                                    download=True, transform=transform)
+                                    download=True, transform=transforms.ToTensor())
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=BATCH_SIZE,
                                           shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
 
 testset = ExtendedCIFAR10(root='./data', train=False,
-                                       download=True, transform=transform)
+                                       download=True, transform=transforms.ToTensor())
 testloader = torch.utils.data.DataLoader(testset, batch_size=BATCH_SIZE,
                                          shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
-classes = ('plane', 'car', 'bird', 'cat',
-           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE: %d \n Classes: %d"%
-      ("Cifar10",trainset.__len__(),testset.__len__(), BATCH_SIZE, len(classes)))
+print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE: %d \n Classes: %d \n"%
+      ("Cifar10",trainset.__len__(),testset.__len__(), BATCH_SIZE, len(trainset.classes)))
 
 ############
 ## Train ##
@@ -74,7 +68,11 @@ print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print("=> Using device: %s"%device)
+if device = 'cuda':
+    torch.cuda.empty_cache()
+    print("=> Using device: %s"%device)
+else:
+    raise RuntimeError("=> CUDA not available, abord.")
 
 net = CWCIFAR10()
 net = net.to(device)
@@ -99,34 +97,38 @@ with torch.no_grad():
 CONST = 0.01 # initial minimization constance
 CONF = 0 # defines the classification confidence
 
-N_SAMPLES = 100
+N_SAMPLES = 10
 MAX_ITERATIONS = 10000
 
-classes = ('plane', 'car', 'bird', 'cat',
-           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 sampleloader = torch.utils.data.DataLoader(trainset, batch_size=1,
                                          shuffle=True, num_workers=NUM_WORKERS)
 
 # Load samples for the attack
-samples = []
+sample_imgs = []
+sample_labs = []
 dataiter = iter(sampleloader)
 for i in range(N_SAMPLES):
     data = dataiter.next()
     data[0] = torch.reshape(data[0],(3,32,32))
     data[1] = int(data[1][0])
-    samples.append(data)
+    sample_imgs.append(data[0])
+    sample_labs.append(data[1])
+target = 2 # target class
+sampleset = torch.utils.data.TensorDataset(torch.stack(sample_imgs),
+                                            torch.tensor([target for i in range(len(sample_imgs))]))
+sampleloader = torch.utils.data.DataLoader(sampleset, batch_size=10,
+                                            shuffle=True, num_workers=NUM_WORKERS, pin_memory = True)
 
-# sampleset = torch.utils.data.Dataset(samples, batch_size=20, shuffle=True, num_workers=NUM_WORKERS)
 print("\n=> Running attack with %d samples"%N_SAMPLES)
 attack = L2Attack(CONST, CONF, MAX_ITERATIONS)
 
 torch.cuda.empty_cache() # empty cache before attack
-target = 2 # target class
-attack.attack(net, samples,[target for i in range(len(samples))])
 
-with torch.no_grad():
-    attack.test(net)
+attack.attack(net, sampleloader, sample_labs)
+
+# with torch.no_grad():
+#     attack.test(net)
 
 ## Use all classes as targets
 # for target,_ in enumerate(classes, 0):
