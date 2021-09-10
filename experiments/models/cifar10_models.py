@@ -17,6 +17,9 @@ class CWCIFAR10(nn.Module):
         The model architecture for CIFAR10 that Nicholas Carlini and David Wagner used in
         'Towards evaluating the robustness of Neural Networks'.
         A convolutional NN, using classes BasicConv2D and BasicLinear.
+
+        All computations (forward, predict, _train, _test) are done in batches,
+        reshape is used in the case of one (lonely) sample.
     """
     def __init__(self):
         super(CWCIFAR10, self).__init__()
@@ -28,14 +31,13 @@ class CWCIFAR10(nn.Module):
         self.fc1 = BasicLinear(128*5*5,256)
         self.fc2 = BasicLinear(256,256)
         self.fc3 = BasicLinear(256,10)
-
-        self.batch_size = 128
         print("\n", self)
 
 
     def forward(self, x):
-        if len(x.shape) == 3:
-            x = torch.reshape(x,(1,*(x.shape))) # convolution input must be 4-dimensional
+        # check if x batch of samples or sample
+        if len(x.size()) < 4:
+            x = torch.reshape(x,(1,*(x.size())))
         x = self.conv11(x)
         x = self.conv12(x)
         x = self.mp(x)
@@ -44,7 +46,6 @@ class CWCIFAR10(nn.Module):
         x = self.mp(x)
         N, C, W, H = (*(x.shape),)
         x = torch.reshape(x, (N, C*W*H))
-        # x = F.dropout(x, p = .5)
         x = self.fc1(x)
         x = F.dropout(x, p = .5)
         x = self.fc2(x)
@@ -53,6 +54,20 @@ class CWCIFAR10(nn.Module):
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
 
         return logits
+
+    def predict(self, samples, logits = False):
+        # turn on evaluation mode, aka don't use dropout
+        # check if x batch of samples or sample
+        if len(samples.size()) < 4:
+            samples = torch.reshape(samples, (1, *samples.size()))
+
+        self.eval()
+        logs = self.forward(samples)
+        if logits:
+            return torch.argmax(logs, 1), logs
+        softmax = torch.nn.Softmax(dim=1)
+        probs = softmax(logs)
+        return torch.argmax(probs, 1), probs
 
 
     def _train(self, trainloader):
@@ -98,7 +113,7 @@ class CWCIFAR10(nn.Module):
             epoch_time = time.time()-start_time
             cur_lr = optimizer.param_groups[0]["lr"]
             scheduler.step()
-            print("=> Epoch %d, accumulated loss = %.4f"%(epoch, acc_loss/self.batch_size))
+            print("=> Epoch %d, accumulated loss = %.4f"%(epoch, acc_loss/batch_size))
             print("=> [EPOCH TRAINING] %.4f mins."%(epoch_time/60))
             if epoch%5 == 0:
                 learning_curve(iters, losses, epoch, cur_lr)
@@ -107,21 +122,17 @@ class CWCIFAR10(nn.Module):
             os.makedirs('models')
         torch.save(self.state_dict(), "pretrained/CWCIFAR10.pt")
 
+
     def _test(self, testloader):
-
-        # turn on evaluation mode, aka don't use dropout
-        self.eval()
-
         accuracy = 0
         for i, (samples, targets) in enumerate(testloader, 0):
-            losses = []
             samples = samples.to(device)
             targets = targets.to(device)
-            pred = self.forward(samples)
-            _, labels = torch.max(pred, 1)
-            accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(labels))])
+            labels, probs = self.predict(samples)
+            accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
 
-        total = self.batch_size * i
-        accuracy = float(accuracy)/total
-        print("*******************")
+        total = testloader.batch_size * (i+1)
+        print(accuracy, total)
+        accuracy = float(accuracy/total)
+        print("**********************")
         print("Test accuracy: %.2f"%(accuracy*100),"%")
