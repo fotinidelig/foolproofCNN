@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 import torchvision
-from .utils import BasicConv2D, BasicLinear
+from .utils import BasicConv2D, BasicLinear, BasicModel
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -12,7 +12,7 @@ import time
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 plt.rcParams["font.family"] = "serif"
 
-class CWCIFAR10(nn.Module):
+class CWCIFAR10(BasicModel):
     """
         The model architecture for CIFAR10 that Nicholas Carlini and David Wagner used in
         'Towards evaluating the robustness of Neural Networks'.
@@ -122,17 +122,4 @@ class CWCIFAR10(nn.Module):
             os.makedirs('models')
         torch.save(self.state_dict(), "pretrained/CWCIFAR10.pt")
 
-
-    def _test(self, testloader):
-        accuracy = 0
-        for i, (samples, targets) in enumerate(testloader, 0):
-            samples = samples.to(device)
-            targets = targets.to(device)
-            labels, probs = self.predict(samples)
-            accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
-
-        total = testloader.batch_size * (i+1)
-        print(accuracy, total)
-        accuracy = float(accuracy/total)
-        print("**********************")
-        print("Test accuracy: %.2f"%(accuracy*100),"%")
+# class WideResNet():
