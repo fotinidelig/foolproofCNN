@@ -28,7 +28,6 @@ class ExtendedCIFAR10(CIFAR10):
             download
         )
 
-        self.classes = list(self.class_to_idx.keys())
 
     def show_sample(
         self,
