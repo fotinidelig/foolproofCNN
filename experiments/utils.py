@@ -1,11 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Optional, Callable
-
-import torch
-import torchvision
-from torchvision.datasets import CIFAR10
-from torch import nn
+from typing import Optional
 
 def show_sample(
     dataset,
