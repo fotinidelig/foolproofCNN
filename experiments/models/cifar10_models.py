@@ -31,6 +31,7 @@ class CWCIFAR10(BasicModel):
         self.fc1 = BasicLinear(128*5*5,256)
         self.fc2 = BasicLinear(256,256)
         self.fc3 = BasicLinear(256,10)
+        self.dropout = nn.Dropout(p=.5)
         print("\n", self)
 
 
@@ -47,7 +48,7 @@ class CWCIFAR10(BasicModel):
         N, C, W, H = (*(x.shape),)
         x = torch.reshape(x, (N, C*W*H))
         x = self.fc1(x)
-        x = F.dropout(x, p = .5)
+        x = self.dropout(x)
         x = self.fc2(x)
         logits = self.fc3(x) # logits layer
 
@@ -122,4 +123,6 @@ class CWCIFAR10(BasicModel):
             os.makedirs('models')
         torch.save(self.state_dict(), "pretrained/CWCIFAR10.pt")
 
-# class WideResNet():
+class WideResNet():
+    def __init__(self):
+        super(WideResNet, self).__init__()
