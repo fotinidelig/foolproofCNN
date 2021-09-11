@@ -4,6 +4,7 @@ import torch
 import torchvision
 from torch import nn
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class BasicConv2D(nn.Module):
     ## Conv + ReLU layers
@@ -28,6 +29,19 @@ class BasicLinear(nn.Module):
         x = self.fc(x)
         x = self.relu(x)
         return x
+
+class BasicResBlock(nn.Module):
+    ## Conv + ReLU layers
+    def __init__(self, i_channels, o_channels, kernel_size, **kwargs):
+        super(BasicResBlock, self).__init__()
+        self.conv = nn.Conv2d(i_channels, o_channels, kernel_size=kernel_size, **kwargs)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.relu(x)
+        return x
+
 
 class BasicModel(nn.Module):
     def __init__(self):
@@ -57,3 +71,19 @@ class BasicModel(nn.Module):
         accuracy = float(accuracy/total)
         print("**********************")
         print("Test accuracy: %.2f"%(accuracy*100),"%")
+
+
+## Debug-friendly-functions
+def print_named_weights_sum(model, p_name):
+    for name, param in model.named_parameters():
+        if p_name in name:
+            print("PARAMETER: %s"%name)
+            print(param.sum().cpu().data)
+
+def debug_activations(model):
+    activation = {}
+    def get_activation(name):
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
+    model.fc2.register_forward_hook(get_activation('fc2'))
