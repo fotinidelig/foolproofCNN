@@ -2,6 +2,29 @@ import torch
 import torchvision
 from torch import nn
 from typing import Optional, Callable
+import matplotlib.pyplot as plt
+import numpy as n
+
+def print_stats(total_samples, adv_samples, const_list, l2_list):
+    success_rate = float(len(adv_samples))/total_samples
+    print("*********")
+    print("=> Stats:")
+    print(f"=> Success Rate: {success_rate:.2f}% || {len(adv_samples)}/{total_samples}")
+    print(f"Mean const: {np.mean(const_list):.3f}")
+    print(f"Mean l2: {np.mean(l2_list):.2f}")
+
+def plot_l2(l2_list, iterations):
+    mean_l2 = [np.mean(l2_list)]*len(l2_list)
+    x = np.arange(len(l2_list))
+    plt.clf()
+    plt.title("L2 distance from input")
+    plt.xlabel("Sample")
+    plt.ylabel("L2 distance")
+    plt.plot(x, l2_list, label='l2', marker='o')
+    plt.plot(x, mean_l2, label="mean", linestyle="--")
+    legend = plt.legend(loc='upper right')
+    plt.savefig(f"l2_distance_{iterations}.png")
+
 
 class BaseAttack():
     def __init__(
