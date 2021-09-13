@@ -58,6 +58,23 @@ class CWCIFAR10(BasicModel):
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
         return logits
 
+class CWMNIST(CWCIFAR10):
+    '''
+        Similar implementation to CWCIFAR10,
+        as described in the same paper
+    '''
+    def __init__(self, **kwargs):
+        super(CWCIFAR10, self).__init__()
+        self.conv11 = BasicConv2D(1, 32, 3, stride=(1,1), **kwargs) # MNIST sample dimensions are (3,28,28)
+        self.conv12 = BasicConv2D(32, 32, 3, stride=(1,1), **kwargs)
+        self.conv21 = BasicConv2D(32, 64, 3, stride=(1,1), **kwargs)
+        self.conv22 = BasicConv2D(64, 64, 3, stride=(1,1), **kwargs)
+        self.mp = nn.MaxPool2d(2)
+        self.fc1 = BasicLinear(64*4*4, 200)
+        self.fc2 = BasicLinear(200, 200)
+        self.fc3 = BasicLinear(200, 10)
+        self.dropout = nn.Dropout(p=.5)
+        print("\n", self)
 
 class WideResNet(BasicModel):
     '''
@@ -83,6 +100,8 @@ class WideResNet(BasicModel):
         self.mp = nn.MaxPool2d(2)
         self.ap = nn.AvgPool2d(8)
         self.fc = BasicLinear(64*width, 10)
+        print("\n", self)
+
 
     def forward(self, x):
         # check if x batch of samples or sample
