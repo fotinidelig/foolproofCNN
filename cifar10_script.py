@@ -8,12 +8,12 @@ from typing import Optional, Callable
 import time
 
 # import experiments
-from experiments.models.cifar10_models import CWCIFAR10
+from experiments.models.cifar10_models import CWCIFAR10, WideResNet
 from experiments.attacks.l2attack import L2Attack
+from experiments.datasets.all import load_cifar10, load_mnist
 
 import torch
 import torchvision
-from torchvision.datasets import CIFAR10
 from torch import nn
 import torch.nn.functional as F
 
@@ -22,9 +22,10 @@ from torch.utils.data import Dataset, DataLoader
 
 
 parser = argparse.ArgumentParser(description='Run model or/and attack on CIFAR10.')
-parser.add_argument('--pre-trained', dest='pretrained', action='store_const',
-                     const=True, default=False,
-                     help='use the pre-trained model stored in ./models/')
+parser.add_argument('--pre-trained', dest='pretrained', action='store_const', const=True,
+                     default=False, help='use the pre-trained model stored in ./models/')
+parser.add_argument('--dataset', dest='dataset', default='cifar10', choices=['cifar10', 'mnist'],
+                     help='define dataset to train or attack')
 args = parser.parse_args()
 
 ############
@@ -38,22 +39,16 @@ BATCH_SIZE = 128
 ## Load Dataset ##
 ##################
 
-trainset = CIFAR10(root='./data', train=True,
-                                    download=True, transform=transforms.ToTensor())
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=BATCH_SIZE,
-                                          shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
+if args.dataset == 'cifar10':
+    print("=> Loading CIFAR10 dataset")
+    trainset, trainloader, testset, testloader = load_cifar10(batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
+if args.dataset == 'mnist':
+    print("=> Loading MNIST dataset")
+    trainset, trainloader, testset, testloader = load_mnist(batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
 
-testset = CIFAR10(root='./data', train=False,
-                                       download=True, transform=transforms.ToTensor())
-testloader = torch.utils.data.DataLoader(testset, batch_size=BATCH_SIZE,
-                                         shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
-
-print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE: %d \n Classes: %d \n"%
-      ("Cifar10",trainset.__len__(),testset.__len__(), BATCH_SIZE, len(trainset.classes)))
-
-############
+###########
 ## Train ##
-############
+###########
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -63,16 +58,17 @@ if device == 'cuda':
 else:
     raise RuntimeError("=> CUDA not available, abord.")
 
-net = CWCIFAR10()
+# net = CWCIFAR10()
+net = WideResNet(i_channels=3, depth=40, width=2)
 net = net.to(device)
 
 if args.pretrained:
     print("\n=> Using pretrained model.")
-    net.load_state_dict(torch.load("pretrained/CWCIFAR10.pt"))
+    net.load_state_dict(torch.load("pretrained/WideResNet.pt"))
 else:
     print("\n=> Training...")
     start_time = time.time()
-    net._train(trainloader)
+    net._train(trainloader, lr_decay=.9, filename="40_2")
     train_time = time.time() - start_time
     print("\n=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
 
@@ -86,8 +82,8 @@ with torch.no_grad():
 CONST = 0.01 # initial minimization constance
 CONF = 0 # defines the classification confidence
 
-N_SAMPLES = 10
-MAX_ITERATIONS = 10000
+N_SAMPLES = 20
+MAX_ITERATIONS = 1000
 
 
 sampleloader = torch.utils.data.DataLoader(trainset, batch_size=1,
