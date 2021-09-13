@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import time
+import os
 import numpy as np
 from typing import Optional, Callable
 import torch
@@ -90,28 +91,20 @@ class BasicModel(nn.Module):
         lr_decay = 1, # set to 1 for no effect
         epochs = 50,
         momentum = .9,
+        **kwargs
     ):
-        # turn on training mode, necessary for dropout layers
+        # turn on training mode, necessary for dropout/batch_norm layers
         self.train()
-
-        def learning_curve(iters, losses, epoch, lr):
-            plt.clf()
-            plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
-            plt.xlabel("Iterations")
-            plt.ylabel("Loss")
-            plt.plot(iters, losses)
-            # plt.show()
-            plt.savefig(f"training_plots/learning_wide_{epoch}.png")
 
         optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum, nesterov = True)
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
         criterion = nn.CrossEntropyLoss()
         batch_size = trainloader.batch_size
+        loss_p_epoch = []
 
-        for epoch in np.arange(epochs):
+        for epoch in range(epochs):
             iters = []
             losses = []
-            acc_loss = 0
             start_time = time.time()
             for i, batch in enumerate(trainloader, 0):
                 data = batch[0].to(device)
@@ -123,15 +116,16 @@ class BasicModel(nn.Module):
                 optimizer.zero_grad()
                 iters.append(i)
                 losses.append(float(loss.item()))
-                acc_loss+=float(loss)
+            loss_p_epoch.append(float(loss.item()))
             epoch_time = time.time()-start_time
             cur_lr = optimizer.param_groups[0]["lr"]
             scheduler.step()
-            print("=> Epoch %d, accumulated loss = %.4f"%(epoch, acc_loss/batch_size))
+            print("=> Epoch %d, loss = %.4f"%(epoch, loss))
             print("=> [EPOCH TRAINING] %.4f mins."%(epoch_time/60))
-            if epoch%5 == 0:
-                learning_curve(iters, losses, epoch, cur_lr)
-
+            # if epoch%5 == 0:
+            #     learning_curve(iters, losses, epoch, cur_lr)
+        if kwargs['filename']:
+            learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, kwargs['filename'])
         if not os.path.isdir('models'):
             os.makedirs('models')
         torch.save(self.state_dict(), "pretrained/WideResNet.pt")
@@ -151,6 +145,14 @@ class BasicModel(nn.Module):
         print("**********************")
         print("Test accuracy: %.2f"%(accuracy*100),"%")
 
+
+def learning_curve(iters, losses, epoch, lr, filename):
+    plt.clf()
+    plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
+    plt.xlabel("Iterations")
+    plt.ylabel("Loss")
+    plt.plot(iters, losses)
+    plt.savefig(f"training_plots/learning_curve_{filename}.png")
 
 ## Debug-friendly-functions
 def print_named_weights_sum(model, p_name):
