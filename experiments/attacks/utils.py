@@ -3,7 +3,7 @@ import torchvision
 from torch import nn
 from typing import Optional, Callable
 import matplotlib.pyplot as plt
-import numpy as n
+import numpy as np
 
 def print_stats(total_samples, adv_samples, const_list, l2_list):
     success_rate = float(len(adv_samples))/total_samples

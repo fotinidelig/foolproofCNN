@@ -115,7 +115,7 @@ class L2Attack(BaseAttack):
                     self.show_image(idx+bidx*batch_size, (best_atck, target), (input, label))
                     adv_samples.append(best_atck)
                     adv_targets.append(target)
-                    l2_distances.append(best_l2)
+                    l2_distances.append(float(best_l2))
                     const_vals.append(best_const)
                 else:
                     print("=> Didn't find attack, CONST = %.3f."%const)
