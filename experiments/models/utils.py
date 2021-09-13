@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+import time
 import numpy as np
 from typing import Optional, Callable
 import torch
@@ -14,9 +16,9 @@ class BasicConv2D(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = self.conv(x)
-        x = self.relu(x)
-        return x
+        out = self.conv(x)
+        out = self.relu(out)
+        return out
 
 class BasicLinear(nn.Module):
     ## Linear + ReLU Layers
@@ -26,21 +28,36 @@ class BasicLinear(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = self.fc(x)
-        x = self.relu(x)
-        return x
+        out = self.fc(x)
+        out = self.relu(out)
+        return out
 
 class BasicResBlock(nn.Module):
-    ## Conv + ReLU layers
-    def __init__(self, i_channels, o_channels, kernel_size, **kwargs):
+    ## BN + ReLU + Conv layers
+    def __init__(self, num_blocks, i_channels, o_channels, kernel_size, **kwargs):
         super(BasicResBlock, self).__init__()
-        self.conv = nn.Conv2d(i_channels, o_channels, kernel_size=kernel_size, **kwargs)
         self.relu = nn.ReLU()
+        self.bn_i = nn.BatchNorm2d(i_channels)
+        self.bn_o = nn.BatchNorm2d(o_channels)
+        self.conv1 = nn.Conv2d(i_channels, o_channels, kernel_size=kernel_size, **kwargs)
+        self.conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, **kwargs)
+        self.num_blocks = num_blocks
 
     def forward(self, x):
-        x = self.conv(x)
-        x = self.relu(x)
-        return x
+        # 1st block
+        out = self.bn_i(x)
+        out = self.relu(out)
+        out = self.conv1(out)
+        out = self.conv2(out)
+
+        # 2nd to last block
+        for i in range(self.num_blocks-1):
+            out = self.bn_o(out)
+            out = self.relu(out)
+            out = self.conv2(out)
+            out = self.conv2(out)
+
+        return out
 
 
 class BasicModel(nn.Module):
@@ -50,13 +67,75 @@ class BasicModel(nn.Module):
     def forward(self, x):
         raise NotImplementedError
 
-    def predict(self, samples, **kwargs):
-        self.eval()
-        raise NotImplementedError
 
-    def _train(self, trainloader):
+    def predict(self, samples, logits = False):
+        # turn on evaluation mode, aka don't use dropout
+        # check if x batch of samples or sample
+        if len(samples.size()) < 4:
+            samples = torch.reshape(samples, (1, *samples.size()))
+
+        self.eval()
+        logs = self.forward(samples)
+        if logits:
+            return torch.argmax(logs, 1), logs
+        softmax = torch.nn.Softmax(dim=1)
+        probs = softmax(logs)
+        return torch.argmax(probs, 1), probs
+
+
+    def _train(
+        self,
+        trainloader,
+        lr = .01,
+        lr_decay = 1, # set to 1 for no effect
+        epochs = 50,
+        momentum = .9,
+    ):
+        # turn on training mode, necessary for dropout layers
         self.train()
-        raise NotImplementedError
+
+        def learning_curve(iters, losses, epoch, lr):
+            plt.clf()
+            plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
+            plt.xlabel("Iterations")
+            plt.ylabel("Loss")
+            plt.plot(iters, losses)
+            # plt.show()
+            plt.savefig(f"training_plots/learning_wide_{epoch}.png")
+
+        optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum, nesterov = True)
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
+        criterion = nn.CrossEntropyLoss()
+        batch_size = trainloader.batch_size
+
+        for epoch in np.arange(epochs):
+            iters = []
+            losses = []
+            acc_loss = 0
+            start_time = time.time()
+            for i, batch in enumerate(trainloader, 0):
+                data = batch[0].to(device)
+                targets = batch[1].to(device)
+                pred = self.forward(data)
+                loss = criterion(pred, targets)
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+                iters.append(i)
+                losses.append(float(loss.item()))
+                acc_loss+=float(loss)
+            epoch_time = time.time()-start_time
+            cur_lr = optimizer.param_groups[0]["lr"]
+            scheduler.step()
+            print("=> Epoch %d, accumulated loss = %.4f"%(epoch, acc_loss/batch_size))
+            print("=> [EPOCH TRAINING] %.4f mins."%(epoch_time/60))
+            if epoch%5 == 0:
+                learning_curve(iters, losses, epoch, cur_lr)
+
+        if not os.path.isdir('models'):
+            os.makedirs('models')
+        torch.save(self.state_dict(), "pretrained/WideResNet.pt")
+
 
     def _test(self, testloader):
         accuracy = 0

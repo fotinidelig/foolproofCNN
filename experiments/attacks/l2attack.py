@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from copy import deepcopy
 from typing import Optional
-from .utils import BaseAttack
+from .utils import BaseAttack, plot_l2, print_stats
 import time as tm
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -55,20 +55,25 @@ class L2Attack(BaseAttack):
         bin_steps = 10
         lr = .01
         batch_size = sampleloader.batch_size
+        total_samples = 0
         adv_samples = []
         adv_targets = []
+        l2_distances = []
+        const_vals = []
+
         eps = np.finfo(float).eps
         for bidx, batch in enumerate(sampleloader):
             inputs = batch[0].to(device)
             targets = batch[1].to(device)
 
             for idx, (input, target) in enumerate(zip(inputs, targets), 0):
-                start_time = tm.time()
+                total_samples+=1
                 found_atck = False # init
                 const = self.init_const # init
                 max_const = self.max_const # init
                 min_const = self.min_const # init
                 w = torch.zeros((3,32,32), requires_grad=True, device=device) # init
+                start_time = tm.time()
                 for step in range(bin_steps):
                     # Initialize w for gradient descent,
                     # needs to start near the previous attack or input
@@ -102,18 +107,20 @@ class L2Attack(BaseAttack):
                         best_l2 = torch.norm(adv_sample - input)
                 torch.cuda.synchronize()
                 total_time = tm.time()-start_time
-                # print("=> Attack took %f mins"%(total_time/60))
+                print("\n=> Attack took %f mins"%(total_time/60))
                 if found_atck:
                     input_l2 = torch.norm(input)
-                    # print("=> Found attack with CONST = %.3f"%(best_const))
+                    print("=> Found attack with CONST = %.3f, L2 = %.3f"%(best_const,best_l2))
                     label = samplelabs[idx+bidx*batch_size]
                     self.show_image(idx+bidx*batch_size, (best_atck, target), (input, label))
-                    preds, probs = net.predict(best_atck)
                     adv_samples.append(best_atck)
                     adv_targets.append(target)
+                    l2_distances.append(float(best_l2))
+                    const_vals.append(best_const)
                 else:
                     print("=> Didn't find attack, CONST = %.3f."%const)
-
+        plot_l2(l2_distances, self.iterations)
+        print_stats(total_samples, adv_samples, const_vals, l2_distances)
         adv_dataset = torch.utils.data.TensorDataset(torch.stack(adv_samples), torch.tensor(adv_targets))
         self.advset = adv_dataset
 
@@ -135,9 +142,4 @@ class L2Attack(BaseAttack):
 
         if not os.path.isdir('advimages'):
             os.makedirs('advimages')
-        plt.savefig("advimages/sample_%d.png"%idx)
-
-    def test(self, net):
-        print("\n=> Testing success of attack")
-        loader = torch.utils.data.DataLoader(self.advset)
-        net._test(loader)
+        plt.savefig("advimages/sample_%d_%s.png"%(idx, classes[target]))
