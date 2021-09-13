@@ -1,17 +1,8 @@
-## Imports
-import numpy as np
-import random
-import matplotlib.pyplot as plt
-from typing import Optional, Callable
-import time
-
 # import experiments
 import torch
 import torchvision
 from torchvision.datasets import CIFAR10, MNIST
-
 import torchvision.transforms as transforms
-from torch.utils.data import Dataset, DataLoader
 
 
 def load_cifar10(batch_size = 128, num_workers = 1, root = './data'):
