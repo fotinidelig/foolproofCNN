@@ -24,16 +24,16 @@ class CWCIFAR10(BasicModel):
 
         Achieved accuracy ~77%
     """
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(CWCIFAR10, self).__init__()
-        self.conv11 = BasicConv2D(3,64,3,stride=(1,1)) # CIFAR sample dimensions are (3,32,32)
-        self.conv12 = BasicConv2D(64,64,3,stride=(1,1))
-        self.conv21 = BasicConv2D(64,128,3,stride=(1,1))
-        self.conv22 = BasicConv2D(128,128,3,stride=(1,1))
+        self.conv11 = BasicConv2D(3, 64, 3, stride=(1,1), **kwargs) # CIFAR sample dimensions are (3,32,32)
+        self.conv12 = BasicConv2D(64, 64, 3, stride=(1,1), **kwargs)
+        self.conv21 = BasicConv2D(64, 128, 3, stride=(1,1), **kwargs)
+        self.conv22 = BasicConv2D(128, 128, 3, stride=(1,1), **kwargs)
         self.mp = nn.MaxPool2d(2)
-        self.fc1 = BasicLinear(128*5*5,256)
-        self.fc2 = BasicLinear(256,256)
-        self.fc3 = BasicLinear(256,10)
+        self.fc1 = BasicLinear(128*5*5, 256)
+        self.fc2 = BasicLinear(256, 256)
+        self.fc3 = BasicLinear(256, 10)
         self.dropout = nn.Dropout(p=.5)
         print("\n", self)
 
@@ -69,16 +69,17 @@ class WideResNet(BasicModel):
         self,
         i_channels: Optional[int] = 3,
         depth: Optional[int] = 16,
-        width: Optional[int] = 1
+        width: Optional[int] = 1,
+        **kwargs
     ):
         super(WideResNet, self).__init__()
         assert (depth-4)%6 == 0, 'depth should be 6n+4'
         N = int((depth-4)/6)
 
-        self.conv1 = BasicResBlock(N, i_channels, o_channels=16, kernel_size=3, padding=1)
-        self.conv2 = BasicResBlock(N, 16, 16*width, 3, padding=1)
-        self.conv3 = BasicResBlock(N, 16*width, 32*width, 3, padding=1)
-        self.conv4 = BasicResBlock(N, 32*width, 64*width, 3, padding=1)
+        self.conv1 = BasicResBlock(N, i_channels, o_channels=16, kernel_size=3, **kwargs)
+        self.conv2 = BasicResBlock(N, 16, 16*width, 3, **kwargs)
+        self.conv3 = BasicResBlock(N, 16*width, 32*width, 3, **kwargs)
+        self.conv4 = BasicResBlock(N, 32*width, 64*width, 3, **kwargs)
         self.mp = nn.MaxPool2d(2)
         self.ap = nn.AvgPool2d(8)
         self.fc = BasicLinear(64*width, 10)
