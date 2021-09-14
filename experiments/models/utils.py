@@ -34,31 +34,41 @@ class BasicLinear(nn.Module):
         return out
 
 class BasicResBlock(nn.Module):
-    ## BN + ReLU + Conv layers
+    ## BN -> RELU -> CONV
     def __init__(self, num_blocks, i_channels, o_channels, kernel_size, **kwargs):
         super(BasicResBlock, self).__init__()
-        self.relu = nn.ReLU()
-        self.bn_i = nn.BatchNorm2d(i_channels)
-        self.bn_o = nn.BatchNorm2d(o_channels)
-        self.conv1 = nn.Conv2d(i_channels, o_channels, kernel_size=kernel_size, **kwargs)
-        self.conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, **kwargs)
         self.num_blocks = num_blocks
 
+        def block(ni, no):
+            layers = [
+                nn.BatchNorm2d(ni),
+                nn.ReLU(),
+                nn.Conv2d(ni, no, kernel_size=kernel_size, **kwargs),
+                nn.BatchNorm2d(no),
+                nn.ReLU(),
+                nn.Conv2d(no, no, kernel_size=kernel_size, **kwargs),
+            ]
+            return layers
+
+        self.block1 = block(i_channels, o_channels)
+        self.block2 = block(o_channels, o_channels)
+
     def forward(self, x):
-        # 1st block
-        out = self.bn_i(x)
-        out = self.relu(out)
-        out = self.conv1(out)
-        out = self.conv2(out)
+        def identity(x, block):
+            channels = x.size()[1]
+            return nn.ReLU(nn.BatchNorm2d(channels))
 
-        # 2nd to last block
+        def forward_block(x, block):
+            out = x
+            for layer in block:
+                out = layer(out)
+            return out
+
+        out = forward_block(x, self.block1)
+
         for i in range(self.num_blocks-1):
-            out = self.bn_o(out)
-            out = self.relu(out)
-            out = self.conv2(out)
-            out = self.conv2(out)
-
-        return out
+            out = forward_block(out, self.block2)
+        return out + identity(x)
 
 
 class BasicModel(nn.Module):
@@ -125,10 +135,10 @@ class BasicModel(nn.Module):
             # if epoch%5 == 0:
             #     learning_curve(iters, losses, epoch, cur_lr)
         if kwargs['filename']:
-            learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, kwargs['filename'])
+            learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['filename'])
         if not os.path.isdir('models'):
             os.makedirs('models')
-        torch.save(self.state_dict(), "pretrained/WideResNet.pt")
+        torch.save(self.state_dict(), f"pretrained/{self.__class__.__name__}.pt")
 
 
     def _test(self, testloader):
@@ -146,7 +156,7 @@ class BasicModel(nn.Module):
         print("Test accuracy: %.2f"%(accuracy*100),"%")
 
 
-def learning_curve(iters, losses, epoch, lr, filename):
+def learning_curve(iters, losses, epoch, lr, batch_size, filename):
     plt.clf()
     plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
     plt.xlabel("Iterations")
@@ -161,6 +171,7 @@ def print_named_weights_sum(model, p_name):
             print("PARAMETER: %s"%name)
             print(param.sum().cpu().data)
 
+# change fc2 layer to the desired layer name
 def debug_activations(model):
     activation = {}
     def get_activation(name):

@@ -92,11 +92,12 @@ class WideResNet(BasicModel):
         super(WideResNet, self).__init__()
         assert (depth-4)%6 == 0, 'depth should be 6n+4'
         N = int((depth-4)/6)
+        widths = [w*i for i in [16,32,64]]
 
-        self.conv1 = BasicResBlock(N, i_channels, o_channels=16, kernel_size=3, **kwargs)
-        self.conv2 = BasicResBlock(N, 16, 16*width, 3, **kwargs)
-        self.conv3 = BasicResBlock(N, 16*width, 32*width, 3, **kwargs)
-        self.conv4 = BasicResBlock(N, 32*width, 64*width, 3, **kwargs)
+        self.group1 = BasicResBlock(1, i_channels, o_channels=16, kernel_size=3, padding=1, **kwargs)
+        self.group2 = BasicResBlock(N, 16, width[0], 3, padding=1, **kwargs)
+        self.group3 = BasicResBlock(N, width[0], width[1], 3, padding=1, **kwargs)
+        self.group4 = BasicResBlock(N, width[1], width[2], 3, padding=1, **kwargs)
         self.mp = nn.MaxPool2d(2)
         self.ap = nn.AvgPool2d(8)
         self.fc = BasicLinear(64*width, 10)
@@ -108,12 +109,12 @@ class WideResNet(BasicModel):
         if len(x.size()) < 4:
             x = torch.reshape(x,(1,*(x.size())))
 
-        out = self.conv1(x)
-        out = self.conv2(out)
+        out = self.group1(x)
+        out = self.group2(out)
         out = self.mp(out)
-        out = self.conv3(out)
+        out = self.group3(out)
         out = self.mp(out)
-        out = self.conv4(out)
+        out = self.group4(out)
         out = self.ap(out)
         N, C, W, H = (*(out.shape),)
         out = torch.reshape(out, (N, C*W*H))
