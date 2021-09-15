@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import time
 import os
 import numpy as np
-from typing import Optional, Callable
+from typing import Optional
 import torch
 import torchvision
 from torch import nn
@@ -35,40 +35,52 @@ class BasicLinear(nn.Module):
 
 class BasicResBlock(nn.Module):
     ## BN -> RELU -> CONV
-    def __init__(self, num_blocks, i_channels, o_channels, kernel_size, **kwargs):
+    def __init__(self, i_channels, o_channels, kernel_size, padding = 1, stride = 1, no_id_map = False):
         super(BasicResBlock, self).__init__()
-        self.num_blocks = num_blocks
 
-        def block(ni, no):
-            layers = [
-                nn.BatchNorm2d(ni),
-                nn.ReLU(),
-                nn.Conv2d(ni, no, kernel_size=kernel_size, **kwargs),
-                nn.BatchNorm2d(no),
-                nn.ReLU(),
-                nn.Conv2d(no, no, kernel_size=kernel_size, **kwargs),
-            ]
-            return layers
+        self.sameInOut = (i_channels == o_channels)
 
-        self.block1 = block(i_channels, o_channels)
-        self.block2 = block(o_channels, o_channels)
+        bn1 = nn.BatchNorm2d(i_channels)
+        bn2 = nn.BatchNorm2d(o_channels)
+        relu = nn.ReLU()
+
+        # stride is used for downsampling, only for first res block
+        if  not self.sameInOut:
+            stride = stride
+        else:
+            stride = 1
+
+        conv1 = nn.Conv2d(i_channels, o_channels, kernel_size=kernel_size, padding=padding, stride=stride)
+        conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, padding=padding, stride=1)
+
+        self.seqRes = nn.Sequential(bn1, relu, conv1, bn2, relu, conv2)
+
+        id_bn = nn.BatchNorm2d(i_channels)
+        id_conv = nn.Conv2d(i_channels, o_channels, 1, stride=stride)
+        self.seqId = nn.Sequential(id_bn, relu, id_conv)
 
     def forward(self, x):
-        def identity(x, block):
-            channels = x.size()[1]
-            return nn.ReLU(nn.BatchNorm2d(channels))
+        def identity(x):
+            if self.sameInOut:
+                return x
+            return self.seqId(x)
 
-        def forward_block(x, block):
-            out = x
-            for layer in block:
-                out = layer(out)
-            return out
-
-        out = forward_block(x, self.block1)
-
-        for i in range(self.num_blocks-1):
-            out = forward_block(out, self.block2)
+        out = self.seqRes(x)
         return out + identity(x)
+
+class WideResBlock(nn.Module):
+    def __init__(self, num_blocks, i_channels, o_channels, kernel_size, **kwargs):
+        super(WideResBlock, self).__init__()
+        self.blocks = []
+        self.blocks.append(BasicResBlock(i_channels, o_channels, kernel_size, **kwargs).to(device))
+
+        for i in range(num_blocks-1):
+            self.blocks.append(BasicResBlock(o_channels, o_channels, kernel_size, **kwargs).to(device))
+        self.blocks = nn.Sequential(*self.blocks)
+
+    def forward(self, x):
+        out = self.blocks(x)
+        return out
 
 
 class BasicModel(nn.Module):
@@ -101,14 +113,17 @@ class BasicModel(nn.Module):
         lr_decay = 1, # set to 1 for no effect
         epochs = 50,
         momentum = .9,
+        weight_decay = 5e-4,
         **kwargs
     ):
         # turn on training mode, necessary for dropout/batch_norm layers
         self.train()
 
-        optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum, nesterov = True)
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum,
+                                     nesterov = True, weight_decay=weight_decay)
+        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs)
+        criterion = nn.CrossEntropyLoss().to(device)
         batch_size = trainloader.batch_size
         loss_p_epoch = []
 

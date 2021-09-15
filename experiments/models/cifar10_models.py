@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 import torchvision
-from .utils import BasicConv2D, BasicLinear, BasicResBlock, BasicModel
+from .utils import BasicConv2D, BasicLinear, WideResBlock, BasicModel
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -42,6 +42,7 @@ class CWCIFAR10(BasicModel):
         # check if x batch of samples or sample
         if len(x.size()) < 4:
             x = torch.reshape(x,(1,*(x.size())))
+
         out = self.conv11(x)
         out = self.conv12(out)
         out = self.mp(out)
@@ -86,36 +87,35 @@ class WideResNet(BasicModel):
         self,
         i_channels: Optional[int] = 3,
         depth: Optional[int] = 16,
-        width: Optional[int] = 1,
-        **kwargs
+        width: Optional[int] = 1
     ):
         super(WideResNet, self).__init__()
         assert (depth-4)%6 == 0, 'depth should be 6n+4'
         N = int((depth-4)/6)
-        widths = [w*i for i in [16,32,64]]
+        widths = [width*i for i in [16,32,64]]
+        widths = [16]+widths
 
-        self.group1 = BasicResBlock(1, i_channels, o_channels=16, kernel_size=3, padding=1, **kwargs)
-        self.group2 = BasicResBlock(N, 16, width[0], 3, padding=1, **kwargs)
-        self.group3 = BasicResBlock(N, width[0], width[1], 3, padding=1, **kwargs)
-        self.group4 = BasicResBlock(N, width[1], width[2], 3, padding=1, **kwargs)
-        self.mp = nn.MaxPool2d(2)
+        # group 1
+        self.conv1 = nn.Conv2d(i_channels, widths[0], kernel_size=3, padding=1)
+
+        self.group2 = WideResBlock(N, widths[0], widths[1], 3)
+        self.group3 = WideResBlock(N, widths[1], widths[2], 3, stride=2)
+        self.group4 = WideResBlock(N, widths[2], widths[3], 3, stride=2)
+        self.bn1 = nn.BatchNorm2d(widths[3])
         self.ap = nn.AvgPool2d(8)
         self.fc = BasicLinear(64*width, 10)
         print("\n", self)
-
 
     def forward(self, x):
         # check if x batch of samples or sample
         if len(x.size()) < 4:
             x = torch.reshape(x,(1,*(x.size())))
 
-        out = self.group1(x)
+        out = self.conv1(x)
         out = self.group2(out)
-        out = self.mp(out)
         out = self.group3(out)
-        out = self.mp(out)
         out = self.group4(out)
-        out = self.ap(out)
+        out = self.ap(F.relu(self.bn1(out)))
         N, C, W, H = (*(out.shape),)
         out = torch.reshape(out, (N, C*W*H))
         logits = self.fc(out)
