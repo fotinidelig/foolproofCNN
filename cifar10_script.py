@@ -100,7 +100,7 @@ def run_attack(sampleloader, const, conf, n_samples, max_iterations, n_classes):
         data[1] = int(data[1][0])
         input_imgs.append(data[0])
         input_labs.append(data[1])
-    attack = L2Attack(net, const, conf, max_iterations)
+    attack = L2Attack(net, sampleloader.dataset, const, conf, max_iterations)
     for i in range(n_classes):
         print("\n=> Running attack with %d samples"%n_samples)
         torch.cuda.empty_cache() # empty cache before attack

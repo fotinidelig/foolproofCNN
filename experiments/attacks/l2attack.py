@@ -5,14 +5,12 @@ import numpy as np
 from copy import deepcopy
 from typing import Optional
 from .utils import BaseAttack, plot_l2, print_stats
+import torch.backends.cudnn as cudnn
 import time as tm
+import sklearn
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-ID = torch.cuda.current_device()
-print("=> CUDA ID: %d"%ID)
-
-classes = ('plane', 'car', 'bird', 'cat',
-           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+cudnn.benchmark = True
 
 # Constraints for image pixel values
 BOXMIN = 0
@@ -21,9 +19,22 @@ BOXMAX = 1
 TO_MUL = .5*(BOXMAX - BOXMIN)
 TO_ADD = .5*(BOXMAX + BOXMIN)
 
+def l2_ball(l2, shape):
+    '''
+        Return random vector of shape
+        and l2 norm
+    '''
+    xrand = np.random.uniform(0, 1, shape)
+    xsum = sum(xrand**2)
+    xrand = xrand*np.sqrt(l2**2/xsum)
+    return xrand
+
+
 class L2Attack(BaseAttack):
     def __init__(
         self,
+        net,
+        dataset,
         init_const,
         conf: Optional[int] = 0,
         iterations: Optional[int] = 10000,
@@ -31,6 +42,8 @@ class L2Attack(BaseAttack):
         min_const: Optional[float] = 1e-3,
     ):
         super(L2Attack, self).__init__(init_const, conf, iterations, max_const, min_const)
+        self.net = net
+        self.classes = dataset.classes
 
     def loss(self, const, adv_sample, input, logits, target):
         """
@@ -51,7 +64,7 @@ class L2Attack(BaseAttack):
     #         be valid after the attack
     #     """
 
-    def attack(self, net, sampleloader, samplelabs):
+    def attack(self, sampleloader, samplelabs):
         bin_steps = 10
         lr = .01
         batch_size = sampleloader.batch_size
@@ -63,8 +76,8 @@ class L2Attack(BaseAttack):
 
         eps = np.finfo(float).eps
         for bidx, batch in enumerate(sampleloader):
-            inputs = batch[0].to(device)
-            targets = batch[1].to(device)
+            inputs = batch[0].to(device, non_blocking=True)
+            targets = batch[1].to(device, non_blocking=True)
 
             for idx, (input, target) in enumerate(zip(inputs, targets), 0):
                 total_samples+=1
@@ -76,12 +89,13 @@ class L2Attack(BaseAttack):
                 start_time = tm.time()
                 for step in range(bin_steps):
                     # Initialize w for gradient descent,
-                    # needs to start near the previous attack or input
-                    if found_atck:
-                        w = w.clone().detach().requires_grad_(True).to(device)
-                    else:
-                        inv_input = torch.atanh((input+eps-TO_ADD)/TO_MUL)
-                        w = inv_input.clone().detach().requires_grad_(True).to(device)
+                    # in an ε-Ball of radious ε or best_l2
+                    # near input
+                    xrand = l2_ball(found_atck and best_l2 or eps)
+                    inv_input = torch.atanh((input+xrand-TO_ADD)/TO_MUL)
+                    w = inv_input.clone().detach().requires_grad_(True).to(device)
+                    w = w + x
+
                     params = [{'params': w}]
                     optimizer = torch.optim.Adam(params, lr=lr)
 
@@ -89,7 +103,7 @@ class L2Attack(BaseAttack):
                     start1=tm.time()
                     for i in range(self.iterations+1):
                         adv_sample = TO_MUL*torch.tanh(w)+TO_ADD
-                        _, logits = net.predict(adv_sample, logits=True) # net weights and input must be same dtype, aka float32
+                        _, logits = self.net.predict(adv_sample, logits=True) # net weights and input must be same dtype, aka float32
                         loss, fx = self.loss(const, adv_sample, input, logits[0], target)
                         loss.backward()
                         optimizer.step()
@@ -135,11 +149,11 @@ class L2Attack(BaseAttack):
         npimgs = list(map(lambda x: x.numpy(), images))
         npimgs = list(map(lambda x: np.round(x*255).astype(int), npimgs))
 
-        ax1.set_title("Original: Class %s"%classes[label])
+        ax1.set_title("Original: Class %s"%self.classes[label])
         pl1=ax1.imshow(np.transpose(npimgs[0], (1, 2, 0)))
-        ax2.set_title("Perturbed: Class %s"%classes[target])
+        ax2.set_title("Perturbed: Class %s"%self.classes[target])
         pl2=ax2.imshow(np.transpose(npimgs[1], (1, 2, 0)))
 
         if not os.path.isdir('advimages'):
             os.makedirs('advimages')
-        plt.savefig("advimages/sample_%d_%s.png"%(idx, classes[target]))
+        plt.savefig("advimages/sample_%d_%s.png"%(idx, self.classes[target]))
