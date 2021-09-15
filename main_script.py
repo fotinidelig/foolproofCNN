@@ -8,7 +8,7 @@ from typing import Optional, Callable
 import time
 
 # import experiments
-from experiments.models.cifar10_models import CWCIFAR10, WideResNet, CWMNIST
+from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
 from experiments.attacks.l2attack import L2Attack
 from experiments.datasets.all import load_cifar10, load_mnist
 
@@ -120,4 +120,5 @@ def run_attack(sampleloader, const, conf, n_samples, max_iterations, n_classes):
 if args.run_attack:
     sampleloader = torch.utils.data.DataLoader(trainset, batch_size=1,
                                              shuffle=True, num_workers=NUM_WORKERS)
-    attack = run_attack(sampleloader, const=.01, conf=0, n_samples=20, max_iterations=1000, len(trainset.classes))
+    attack = run_attack(sampleloader, const=.01, conf=0, n_samples=20,
+                        max_iterations=1000, n_classes=len(trainset.classes))
