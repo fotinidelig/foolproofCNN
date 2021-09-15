@@ -8,7 +8,7 @@ from typing import Optional, Callable
 import time
 
 # import experiments
-from experiments.models.cifar10_models import CWCIFAR10, WideResNet
+from experiments.models.cifar10_models import CWCIFAR10, WideResNet, CWMNIST
 from experiments.attacks.l2attack import L2Attack
 from experiments.datasets.all import load_cifar10, load_mnist
 
@@ -18,14 +18,21 @@ from torch import nn
 import torch.nn.functional as F
 
 import torchvision.transforms as transforms
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 
+############
+## PARSER ##
+############
 
 parser = argparse.ArgumentParser(description='Run model or/and attack on CIFAR10.')
 parser.add_argument('--pre-trained', dest='pretrained', action='store_const', const=True,
                      default=False, help='use the pre-trained model stored in ./models/')
 parser.add_argument('--dataset', dest='dataset', default='cifar10', choices=['cifar10', 'mnist'],
-                     help='define dataset to train or attack')
+                     help='define dataset to train on or attack with')
+parser.add_argument('--model', dest='model', default='cwcifar10', choices=['cwcifar10', 'cwmnist', 'wideresnet'],
+                     help='define the model architecture you want to use')
+parser.add_argument('--attack', dest='run_attack',  action='store_const', const=True,
+                     default=False, help='run attack on defined model')
 args = parser.parse_args()
 
 ############
@@ -58,17 +65,21 @@ if device == 'cuda':
 else:
     raise RuntimeError("=> CUDA not available, abord.")
 
-# net = CWCIFAR10()
-net = WideResNet(i_channels=3, depth=40, width=2)
+if args.model == "cwcifar10":
+    net = CWCIFAR10()
+if args.model == "cwmnist":
+    net = CWMNIST()
+else:
+    net = WideResNet(i_channels=3, depth=40, width=2)
 net = net.to(device)
 
 if args.pretrained:
     print("\n=> Using pretrained model.")
-    net.load_state_dict(torch.load("pretrained/WideResNet.pt"))
+    net.load_state_dict(torch.load(f"pretrained/{net.__class__.__name__}.pt"))
 else:
     print("\n=> Training...")
     start_time = time.time()
-    net._train(trainloader, lr_decay=.9, filename="40_2")
+    net._train(trainloader, lr=.1, lr_decay=.9, filename="22_2")
     train_time = time.time() - start_time
     print("\n=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
 
@@ -79,43 +90,34 @@ with torch.no_grad():
 ## Attack ##
 ############
 
-CONST = 0.01 # initial minimization constance
-CONF = 0 # defines the classification confidence
+def run_attack(sampleloader, const, conf, n_samples, max_iterations, n_classes):
+    input_imgs = []
+    input_labs = []
+    dataiter = iter(sampleloader)
+    for i in range(n_samples):
+        data = dataiter.next()
+        data[0] = torch.reshape(data[0],data[0].size()[1:])
+        data[1] = int(data[1][0])
+        input_imgs.append(data[0])
+        input_labs.append(data[1])
+    attack = L2Attack(net, const, conf, max_iterations)
+    for i in range(n_classes):
+        print("\n=> Running attack with %d samples"%n_samples)
+        torch.cuda.empty_cache() # empty cache before attack
+        target = i # target class
+        inputset = TensorDataset(torch.stack(input_imgs),
+                                                    torch.tensor([target for i in range(len(input_imgs))]))
+        inputloader = DataLoader(inputset, batch_size=10,
+                                                    shuffle=False, num_workers=NUM_WORKERS, pin_memory = True)
+        attack.attack(inputloader, input_labs)
 
-N_SAMPLES = 20
-MAX_ITERATIONS = 1000
+    with torch.no_grad():
+        advloader = DataLoader(advset, batch_size=10,
+                                shuffle=False, num_workers=NUM_WORKERS, pin_memory = True)
+        net._test(attack.advset)
+    return attack
 
-
-sampleloader = torch.utils.data.DataLoader(trainset, batch_size=1,
-                                         shuffle=True, num_workers=NUM_WORKERS)
-
-# Load samples for the attack
-sample_imgs = []
-sample_labs = []
-dataiter = iter(sampleloader)
-for i in range(N_SAMPLES):
-    data = dataiter.next()
-    data[0] = torch.reshape(data[0],(3,32,32))
-    data[1] = int(data[1][0])
-    sample_imgs.append(data[0])
-    sample_labs.append(data[1])
-target = 2 # target class
-sampleset = torch.utils.data.TensorDataset(torch.stack(sample_imgs),
-                                            torch.tensor([target for i in range(len(sample_imgs))]))
-sampleloader = torch.utils.data.DataLoader(sampleset, batch_size=10,
-                                            shuffle=False, num_workers=NUM_WORKERS, pin_memory = True)
-
-print("\n=> Running attack with %d samples"%N_SAMPLES)
-attack = L2Attack(CONST, CONF, MAX_ITERATIONS)
-
-torch.cuda.empty_cache() # empty cache before attack
-
-attack.attack(net, sampleloader, sample_labs)
-
-# with torch.no_grad():
-#     attack.test(net)
-
-## Use all classes as targets
-# for target,_ in enumerate(classes, 0):
-#     attack.attack(samples,[target for i in range(len(samples))])
-#     attack.test(net)
+if args.run_attack:
+    sampleloader = torch.utils.data.DataLoader(trainset, batch_size=1,
+                                             shuffle=True, num_workers=NUM_WORKERS)
+    attack = run_attack(sampleloader, const=.01, conf=0, n_samples=20, max_iterations=1000, len(trainset.classes))
