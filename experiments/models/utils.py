@@ -35,47 +35,33 @@ class BasicLinear(nn.Module):
 
 class BasicResBlock(nn.Module):
     ## BN -> RELU -> CONV
-    def __init__(self, i_channels, o_channels, kernel_size, padding = 1, stride = 1, no_id_map = False):
+    def __init__(self, i_channels, o_channels, kernel_size, stride = 1, no_id_map = False):
         super(BasicResBlock, self).__init__()
 
         self.sameInOut = (i_channels == o_channels)
 
         bn1 = nn.BatchNorm2d(i_channels)
+        relu1 = nn.ReLU(inplace=True)
+        conv1 = nn.Conv2d(i_channels, o_channels, kernel_size=kernel_size, padding=1, stride=stride)
         bn2 = nn.BatchNorm2d(o_channels)
-        relu = nn.ReLU()
-
-        # stride is used for downsampling, only for first res block
-        if  not self.sameInOut:
-            stride = stride
-        else:
-            stride = 1
-
-        conv1 = nn.Conv2d(i_channels, o_channels, kernel_size=kernel_size, padding=padding, stride=stride)
-        conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, padding=padding, stride=1)
-
-        self.seqRes = nn.Sequential(bn1, relu, conv1, bn2, relu, conv2)
-
-        id_bn = nn.BatchNorm2d(i_channels)
-        id_conv = nn.Conv2d(i_channels, o_channels, 1, stride=stride)
-        self.seqId = nn.Sequential(id_bn, relu, id_conv)
+        relu2 = nn.ReLU(inplace=True)
+        conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, padding=1, stride=1)
+        self.seqRes = nn.Sequential(bn1, relu1, conv1, bn2, relu2, conv2)
+        self.id_conv = nn.Conv2d(i_channels, o_channels, 1, stride=stride)
 
     def forward(self, x):
-        def identity(x):
-            if self.sameInOut:
-                return x
-            return self.seqId(x)
-
         out = self.seqRes(x)
-        return out + identity(x)
+        out += self.sameInOut and x or self.id_conv(x)
+        return out
 
 class WideResBlock(nn.Module):
-    def __init__(self, num_blocks, i_channels, o_channels, kernel_size, **kwargs):
+    def __init__(self, n_blocks, i_channels, o_channels, kernel_size, stride=1):
         super(WideResBlock, self).__init__()
         self.blocks = []
-        self.blocks.append(BasicResBlock(i_channels, o_channels, kernel_size, **kwargs).to(device))
+        self.blocks.append(BasicResBlock(i_channels, o_channels, kernel_size, stride=stride).to(device))
 
-        for i in range(num_blocks-1):
-            self.blocks.append(BasicResBlock(o_channels, o_channels, kernel_size, **kwargs).to(device))
+        for i in range(n_blocks-1):
+            self.blocks.append(BasicResBlock(o_channels, o_channels, kernel_size, stride=1).to(device))
         self.blocks = nn.Sequential(*self.blocks)
 
     def forward(self, x):

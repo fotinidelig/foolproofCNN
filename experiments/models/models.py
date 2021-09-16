@@ -102,7 +102,6 @@ class WideResNet(BasicModel):
         self.group3 = WideResBlock(N, widths[1], widths[2], 3, stride=2)
         self.group4 = WideResBlock(N, widths[2], widths[3], 3, stride=2)
         self.bn1 = nn.BatchNorm2d(widths[3])
-        self.ap = nn.AvgPool2d(8)
         self.fc = BasicLinear(64*width, 10)
         print("\n", self)
 
@@ -115,7 +114,8 @@ class WideResNet(BasicModel):
         out = self.group2(out)
         out = self.group3(out)
         out = self.group4(out)
-        out = self.ap(F.relu(self.bn1(out)))
+        out = F.relu(self.bn1(out), inplace=True)
+        out = F.avg_pool2d(out, 8)
         N, C, W, H = (*(out.shape),)
         out = torch.reshape(out, (N, C*W*H))
         logits = self.fc(out)
