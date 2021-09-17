@@ -13,6 +13,10 @@ from typing import Optional
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 plt.rcParams["font.family"] = "serif"
 
+###############
+## CWCIFAR10 ##
+###############
+
 class CWCIFAR10(BasicModel):
     """
         The model architecture for CIFAR10 that Nicholas Carlini and David Wagner used in
@@ -59,6 +63,10 @@ class CWCIFAR10(BasicModel):
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
         return logits
 
+#############
+## CWMNIST ##
+#############
+
 class CWMNIST(CWCIFAR10):
     '''
         Similar implementation to CWCIFAR10,
@@ -77,6 +85,10 @@ class CWMNIST(CWCIFAR10):
         self.fc3 = BasicLinear(200, 10)
         self.dropout = nn.Dropout(p=.5)
         print("\n", self)
+
+#################
+## Wide ResNet ##
+#################
 
 class WideResNet(BasicModel):
     '''

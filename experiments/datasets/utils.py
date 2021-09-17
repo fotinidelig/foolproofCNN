@@ -20,7 +20,7 @@ def show_sample(
     labels = [dataset[i][1] for i in indices]
 
     for img in images:
-        img = img/2 + .5 # un-normalize
+        img = img + .5 # un-normalize
         npimg = img.numpy()
         npimg = np.round(nping*255).astype(int)
         plt.imshow(np.transpose(npimg, (1, 2, 0)))

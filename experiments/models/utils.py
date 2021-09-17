@@ -51,7 +51,7 @@ class BasicResBlock(nn.Module):
 
     def forward(self, x):
         out = self.seqRes(x)
-        out += self.sameInOut and x or self.id_conv(x)
+        out += x if self.sameInOut else self.id_conv(x)
         return out
 
 class WideResBlock(nn.Module):
@@ -97,7 +97,7 @@ class BasicModel(nn.Module):
         trainloader,
         lr = .01,
         lr_decay = 1, # set to 1 for no effect
-        epochs = 50,
+        epochs = 35,
         momentum = .9,
         weight_decay = 5e-4,
         **kwargs
@@ -107,8 +107,8 @@ class BasicModel(nn.Module):
 
         optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum,
                                      nesterov = True, weight_decay=weight_decay)
-        # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs)
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs)
         criterion = nn.CrossEntropyLoss().to(device)
         batch_size = trainloader.batch_size
         loss_p_epoch = []
@@ -131,8 +131,7 @@ class BasicModel(nn.Module):
             epoch_time = time.time()-start_time
             cur_lr = optimizer.param_groups[0]["lr"]
             scheduler.step()
-            print("=> Epoch %d, loss = %.4f"%(epoch, loss))
-            print("=> [EPOCH TRAINING] %.4f mins."%(epoch_time/60))
+            print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%(epoch, loss.item(), cur_lr, epoch_time/60))
             # if epoch%5 == 0:
             #     learning_curve(iters, losses, epoch, cur_lr)
         if kwargs['filename']:
@@ -151,7 +150,6 @@ class BasicModel(nn.Module):
             accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
 
         total = testloader.batch_size * (i+1)
-        print(accuracy, total)
         accuracy = float(accuracy/total)
         print("**********************")
         print("Test accuracy: %.2f"%(accuracy*100),"%")
@@ -166,9 +164,9 @@ def learning_curve(iters, losses, epoch, lr, batch_size, filename):
     plt.savefig(f"training_plots/learning_curve_{filename}.png")
 
 ## Debug-friendly-functions
-def print_named_weights_sum(model, p_name):
+def print_named_weights_sum(model, p_name = None):
     for name, param in model.named_parameters():
-        if p_name in name:
+        if  not p_name or p_name in name:
             print("PARAMETER: %s"%name)
             print(param.sum().cpu().data)
 
