@@ -2,3 +2,4 @@ __pycache__/
 data/
 training_plots/
 advimages/
+datasets/

@@ -27,10 +27,14 @@ from torch.utils.data import Dataset, DataLoader, TensorDataset
 parser = argparse.ArgumentParser(description='Run model or/and attack on CIFAR10.')
 parser.add_argument('--pre-trained', dest='pretrained', action='store_const', const=True,
                      default=False, help='use the pre-trained model stored in ./models/')
-parser.add_argument('--dataset', dest='dataset', default='cifar10', choices=['cifar10', 'mnist'],
+parser.add_argument('--dataset', default='cifar10', choices=['cifar10', 'mnist'],
                      help='define dataset to train on or attack with')
-parser.add_argument('--model', dest='model', default='cwcifar10', choices=['cwcifar10', 'cwmnist', 'wideresnet'],
+parser.add_argument('--model', default='cwcifar10', choices=['cwcifar10', 'cwmnist', 'wideresnet'],
                      help='define the model architecture you want to use')
+parser.add_argument('--depth', default=28, type=int,
+                    help='total number of conv layers in a WideResNet')
+parser.add_argument('--width', default=2, type=int,
+                    help='width of a WideResNet')
 parser.add_argument('--attack', dest='run_attack',  action='store_const', const=True,
                      default=False, help='run attack on defined model')
 args = parser.parse_args()
@@ -69,8 +73,9 @@ if args.model == "cwcifar10":
     net = CWCIFAR10()
 if args.model == "cwmnist":
     net = CWMNIST()
-else:
-    net = WideResNet(i_channels=3, depth=40, width=2)
+if args.model == "wideresnet":
+    net = WideResNet(i_channels=3, depth=args.depth, width=args.width)
+
 net = net.to(device)
 
 if args.pretrained:
@@ -102,7 +107,7 @@ def run_attack(sampleloader, const, conf, n_samples, max_iterations, n_classes):
         input_labs.append(data[1])
     attack = L2Attack(net, sampleloader.dataset, const, conf, max_iterations)
     for i in range(n_classes):
-        print("\n=> Running attack with %d samples"%n_samples)
+        print(f"\n=> Running attack with {n_samples} samples and target class {i}")
         torch.cuda.empty_cache() # empty cache before attack
         target = i # target class
         inputset = TensorDataset(torch.stack(input_imgs),

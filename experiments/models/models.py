@@ -62,7 +62,8 @@ class CWCIFAR10(BasicModel):
 class CWMNIST(CWCIFAR10):
     '''
         Similar implementation to CWCIFAR10,
-        as described in the same paper
+        as described in the same paper.
+        Achieved accuracy ~98%
     '''
     def __init__(self, **kwargs):
         super(CWCIFAR10, self).__init__()
@@ -117,7 +118,7 @@ class WideResNet(BasicModel):
         out = F.relu(self.bn1(out), inplace=True)
         out = F.avg_pool2d(out, 8)
         N, C, W, H = (*(out.shape),)
-        out = torch.reshape(out, (N, C*W*H))
+        out = out.view(-1, C*W*H)
         logits = self.fc(out)
 
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
