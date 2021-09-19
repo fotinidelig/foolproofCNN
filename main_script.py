@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 ## Imports
 import argparse
 import numpy as np
@@ -8,12 +10,14 @@ from typing import Optional, Callable
 import time
 
 # import experiments
+from experiments.models.utils import write_output
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
 from experiments.attacks.l2attack import L2Attack
-from experiments.datasets.all import load_cifar10, load_mnist
+from experiments.utils import load_data
 
 import torch
 import torchvision
+from torchvision.datasets import CIFAR10, MNIST
 from torch import nn
 import torch.nn.functional as F
 
@@ -25,6 +29,7 @@ from torch.utils.data import Dataset, DataLoader, TensorDataset
 ############
 
 parser = argparse.ArgumentParser(description='Run model or/and attack on CIFAR10.')
+# MODULE
 parser.add_argument('--pre-trained', dest='pretrained', action='store_const', const=True,
                      default=False, help='use the pre-trained model stored in ./models/')
 parser.add_argument('--dataset', default='cifar10', choices=['cifar10', 'mnist'],
@@ -35,9 +40,16 @@ parser.add_argument('--depth', default=28, type=int,
                     help='total number of conv layers in a WideResNet')
 parser.add_argument('--width', default=2, type=int,
                     help='width of a WideResNet')
+parser.add_argument('--epochs', default=35, type=int,
+                    help='training epochs')
+parser.add_argument('--lr', default=0.01, type=float,
+                    help='initial learning rate')
+parser.add_argument('--lr-decay',dest='lr_decay', default=0.95, type=float,
+                    help='learning rate (exponential) decay')
 parser.add_argument('--attack', dest='run_attack',  action='store_const', const=True,
                      default=False, help='run attack on defined model')
 args = parser.parse_args()
+
 
 ############
 ## GLOBAL ##
@@ -52,10 +64,10 @@ BATCH_SIZE = 128
 
 if args.dataset == 'cifar10':
     print("=> Loading CIFAR10 dataset")
-    trainset, trainloader, testset, testloader = load_cifar10(batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
+    trainset, trainloader, testset, testloader = load_data(CIFAR10, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
 if args.dataset == 'mnist':
     print("=> Loading MNIST dataset")
-    trainset, trainloader, testset, testloader = load_mnist(batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
+    trainset, trainloader, testset, testloader = load_data(MNIST, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
 
 ###########
 ## Train ##
@@ -84,12 +96,13 @@ if args.pretrained:
 else:
     print("\n=> Training...")
     start_time = time.time()
-    net._train(trainloader, lr=.1, lr_decay=.9, filename="22_2")
+    net._train(trainloader, epochs=args.epochs, lr=args.lr, lr_decay=args.lr_decay, filename="cifar10")
     train_time = time.time() - start_time
     print("\n=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
 
 with torch.no_grad():
-    net._test(testloader)
+    accuracy = net._test(testloader)
+    write_output(net, accuracy, args.lr, args.lr_decay)
 
 ############
 ## Attack ##
@@ -105,6 +118,7 @@ def run_attack(sampleloader, const, conf, n_samples, max_iterations, n_classes):
         data[1] = int(data[1][0])
         input_imgs.append(data[0])
         input_labs.append(data[1])
+
     attack = L2Attack(net, sampleloader.dataset, const, conf, max_iterations)
     for i in range(n_classes):
         print(f"\n=> Running attack with {n_samples} samples and target class {i}")
@@ -117,9 +131,9 @@ def run_attack(sampleloader, const, conf, n_samples, max_iterations, n_classes):
         attack.attack(inputloader, input_labs)
 
     with torch.no_grad():
-        advloader = DataLoader(advset, batch_size=10,
+        advloader = DataLoader(attack.advset, batch_size=10,
                                 shuffle=False, num_workers=NUM_WORKERS, pin_memory = True)
-        net._test(attack.advset)
+        net._test(advloader)
     return attack
 
 if args.run_attack:

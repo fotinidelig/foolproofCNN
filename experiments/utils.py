@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional
+import torch
+from torchvision import transforms
+from torchvision.datasets import MNIST, CIFAR10
 
 def show_sample(
     dataset,
@@ -58,6 +61,6 @@ def load_data(dataclass, batch_size = 128, num_workers = 1, root = './data'):
                        shuffle=False, num_workers=num_workers, pin_memory=True)
 
     print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE: %d \n Classes: %d \n"%
-          ("Cifar10",trainset.__len__(),testset.__len__(), batch_size, len(trainset.classes)))
+          (dataclass.__class__.__name__,trainset.__len__(),testset.__len__(), batch_size, len(trainset.classes)))
 
     return trainset, trainloader, testset, testloader
