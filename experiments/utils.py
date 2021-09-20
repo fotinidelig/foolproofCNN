@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional
 import torch
-from torchvision import transforms
+import torchvision.transforms as T
 from torchvision.datasets import MNIST, CIFAR10
 
 def show_sample(
@@ -40,7 +40,7 @@ def normalize(data: torch.tensor):
     dims = (0,1,2) if len(data.shape) == 3 else 0
     mean = data.float().mean(dims)
     std =  data.float().std(dims)
-    return transforms.Normalize((*mean,), (*std,))
+    return T.Normalize((*mean,), (*std,))
 
 def load_data(dataclass, batch_size = 128, num_workers = 1, root = './data'):
     '''
@@ -49,7 +49,14 @@ def load_data(dataclass, batch_size = 128, num_workers = 1, root = './data'):
     '''
     mean = (.5,.5,.5) if dataclass != MNIST else (.5)
     std = (1,1,1) if dataclass != MNIST else (1)
-    transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean, std)])
+    transform_mnist = T.Compose([T.ToTensor(),T.Normalize(mean, std)])
+    transform_cifar = T.Compose([
+            T.ToTensor(),
+            T.Normalize(mean, std),
+            T.RandomCrop(32),
+            T.RandomHorizontalFlip()])
+    transform = transform_cifar if dataclass != MNIST else transform_mnist
+
     trainset = dataclass(root=root, train=True,
                        download=True, transform=transform)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
