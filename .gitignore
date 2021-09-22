@@ -3,3 +3,6 @@ data/
 training_plots/
 advimages/
 datasets/
+
+train.out
+attack.out

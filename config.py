@@ -10,12 +10,9 @@ import sys, argparse, configparser
     --attack_fname: filename that contains attack stats,
     and any other added parameters.
 
-    This is an unofficial configuration file,
-    please use another format for large-scale usage
-    e.g. config.ini, config.yaml
-
     Usage via the command line.
 '''
+
 config = configparser.ConfigParser()
 config.read('config.ini')
 verbose = config.getboolean('general','verbose')
@@ -38,7 +35,7 @@ def write_config(section, **kwargs):
         config.write(configfile)
 
 def main():
-    parser = argparse.ArgumentParser(description='Set configuration parameters for main_script.py via CL.')
+    parser = argparse.ArgumentParser(description='Set configuration parameters of config.ini via CL.')
     parser.add_argument('-s', '--section', type=str,
                          help='section of config.ini in which to add parameter')
     parser.add_argument('-v', '--verbose', type=str, choices=['yes','no'], help='set verbose')
