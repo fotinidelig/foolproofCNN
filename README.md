@@ -11,4 +11,4 @@ Models:
 
 Attacks:
 - [N. Carlini and D. Wagner, "Towards Evaluating the Robustness of Neural Networks" 2017 IEEE Symposium on Security and Privacy (SP), 2017, pp. 39-57, doi: 10.1109/SP.2017.49.](https://ieeexplore.ieee.org/document/7958570)
-- [I. Goodfellow, J. Shlens and C. Szegedy, "Explaining and Harnessing Adversarial Examples" 2015 International Conference on Learning Representations (ICLR), 2015](https://arxiv.org/abs/1412.6572v3)
+- [I. Goodfellow, J. Shlens and C. Szegedy, "Explaining and Harnessing Adversarial Examples" 2015 International Conference on Learning Representations (ICLR), 2015.](https://arxiv.org/abs/1412.6572v3)
