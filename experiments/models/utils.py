@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import time
+from datetime import datetime
 import os
 import numpy as np
 from typing import Optional
@@ -87,13 +88,12 @@ class BasicModel(nn.Module):
 
 
     def predict(self, samples, logits = False):
-        # turn on evaluation mode, aka don't use dropout
         # check if x batch of samples or sample
         if len(samples.size()) < 4:
             samples = torch.reshape(samples, (1, *samples.size()))
 
         self.eval()
-        logs = self.forward(samples)
+        logs = self.forward(samples.float())
         if logits:
             return torch.argmax(logs, 1), logs
         softmax = torch.nn.Softmax(dim=1)
@@ -129,7 +129,7 @@ class BasicModel(nn.Module):
             for i, batch in enumerate(trainloader, 0):
                 data = batch[0].to(device)
                 targets = batch[1].to(device)
-                pred = self.forward(data)
+                pred = self.forward(data.float())
                 loss = criterion(pred, targets)
                 loss.backward()
                 optimizer.step()
@@ -153,10 +153,11 @@ class BasicModel(nn.Module):
 
 
     def _test(self, testloader):
+        self.cpu()
         accuracy = 0
         for i, (samples, targets) in enumerate(testloader, 0):
-            samples = samples.to(device)
-            targets = targets.to(device)
+            samples = samples
+            targets = targets
             labels, probs = self.predict(samples)
             accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
 
@@ -168,6 +169,7 @@ def write_output(model, accuracy, lr, lr_decay):
     f = open(train_fname, 'a')
     kwargs = dict(file=f)
     print("<==>", **kwargs)
+    print(datetime.now(), **kwargs)
     print(f"Model {model.__class__.__name__}, LR {lr}, LR_DECAY {lr_decay}", **kwargs)
     print("Test accuracy: %.2f"%(accuracy*100),"%", **kwargs)
     print("=><=", **kwargs)

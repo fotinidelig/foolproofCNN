@@ -33,7 +33,7 @@ def run_attack(net, targeted, sampleloader, const, conf, n_samples, max_iteratio
     dataiter = iter(sampleloader)
 
     i = 0
-    while i <= n_samples:
+    while i < n_samples:
         data = dataiter.next()
         img = torch.reshape(data[0],data[0].size()[1:])
         label = int(data[1][0])
@@ -42,7 +42,7 @@ def run_attack(net, targeted, sampleloader, const, conf, n_samples, max_iteratio
             input_imgs.append(img)
             input_labs.append(label)
 
-    attack = L2Attack(net, sampleloader.dataset, const, conf, max_iterations)
+    attack = L2Attack(sampleloader.dataset, const, conf, max_iterations)
     iterations = 1 if not targeted else n_classes
     for i in range(iterations):
         print(f"\n=> Running attack with {n_samples} samples.")
@@ -52,7 +52,7 @@ def run_attack(net, targeted, sampleloader, const, conf, n_samples, max_iteratio
                                 torch.tensor([target for i in range(len(input_imgs))]))
         inputloader = DataLoader(inputset, batch_size=10,
                                 shuffle=False, num_workers=2)
-        attack.attack(targeted, inputloader, input_labs)
+        attack.attack(net, targeted, inputloader, input_labs)
 
     with torch.no_grad():
         advloader = DataLoader(attack.advset, batch_size=10,
@@ -66,7 +66,7 @@ def main():
     ## PARSER ##
     ############
 
-    parser = argparse.ArgumentParser(description='Run model or/and attack on CIFAR10.')
+    parser = argparse.ArgumentParser(description='Run model or/and attack on CIFAR10 and MNIST.')
     parser.add_argument('--pre-trained', dest='pretrained', action='store_const', const=True,
                          default=False, help='use the pre-trained model stored in ./models/')
     parser.add_argument('--dataset', default='cifar10', choices=['cifar10', 'mnist'],
@@ -157,7 +157,7 @@ def main():
         sampleloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                                  shuffle=True, num_workers=NUM_WORKERS)
         attack = run_attack(net, args.targeted, sampleloader, const=.01, conf=0, n_samples=args.n_samples,
-                            max_iterations=1000, n_classes=len(trainset.classes))
+                            max_iterations=5000, n_classes=len(trainset.classes))
 
 if __name__ == "__main__":
     main()

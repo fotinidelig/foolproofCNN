@@ -42,20 +42,23 @@ def normalize(data: torch.tensor):
     std =  data.float().std(dims)
     return T.Normalize((*mean,), (*std,))
 
-def load_data(dataclass, batch_size = 128, num_workers = 1, root = './data'):
+def load_data(dataclass, augment, batch_size = 128, num_workers = 2, root = './data'):
     '''
         Loads CIFAR10 or MNIST datasets and converts
         image range from [0,1] to [-0.5,0.5]
     '''
     mean = (.5,.5,.5) if dataclass != MNIST else (.5)
     std = (1,1,1) if dataclass != MNIST else (1)
-    transform_mnist = T.Compose([T.ToTensor(),T.Normalize(mean, std)])
-    transform_cifar = T.Compose([
+    transform_standard = T.Compose([T.ToTensor(),T.Normalize(mean, std)])
+    transform_augment = T.Compose([
             T.ToTensor(),
             T.Normalize(mean, std),
+            T.Pad(4, padding_mode='reflect'),
+            T.RandomHorizontalFlip(),
             T.RandomCrop(32),
             T.RandomHorizontalFlip()])
-    transform = transform_cifar if dataclass != MNIST else transform_mnist
+
+    transform = transform_augment if augment else transform_standard
 
     trainset = dataclass(root=root, train=True,
                        download=True, transform=transform)

@@ -49,7 +49,7 @@ class CWCIFAR10(BasicModel):
         if len(x.size()) < 4:
             x = torch.reshape(x,(1,*(x.size())))
 
-        out = self.conv11(x)
+        out = self.conv11(x.float())
         out = self.conv12(out)
         out = self.mp(out)
         out = self.conv21(out)
@@ -101,9 +101,9 @@ class WideResNet(BasicModel):
     '''
     def __init__(
         self,
-        i_channels: Optional[int] = 3,
-        depth: Optional[int] = 16,
-        width: Optional[int] = 1
+        i_channels = 3,
+        depth = 16,
+        width = 1
     ):
         super(WideResNet, self).__init__()
         assert (depth-4)%6 == 0, 'depth should be 6n+4'
@@ -127,7 +127,7 @@ class WideResNet(BasicModel):
         if len(x.size()) < 4:
             x = torch.reshape(x,(1,*(x.size())))
 
-        out = self.conv1(x)
+        out = self.conv1(x.float())
         out = self.group2(out)
         out = self.group3(out)
         out = self.group4(out)
