@@ -4,14 +4,30 @@ from torch import nn
 from typing import Optional, Callable
 import matplotlib.pyplot as plt
 import numpy as np
+from datetime import datetime
 
-def print_stats(total_samples, adv_samples, const_list, l2_list):
+## READ CONFIGURATION PARAMETERS
+import configparser
+config = configparser.ConfigParser()
+config.read('config.ini')
+verbose = config.getboolean('general','verbose')
+attack_fname = config.get('general','attack_fname')
+
+def write_output(total_samples, adv_samples, const_list, l2_list, dataset):
     success_rate = float(len(adv_samples))/total_samples
-    print("*********")
-    print("=> Stats:")
-    print(f"=> Success Rate: {success_rate:.2f}% || {len(adv_samples)}/{total_samples}")
-    print(f"Mean const: {np.mean(const_list):.3f}")
-    print(f"Mean l2: {np.mean(l2_list):.2f}")
+    cosnt_mean = np.mean(const_list) if len(const_list) > 0 else -1
+    cosnt_l2 = np.mean(l2_list) if len(l2_list) > 0 else -1
+
+    f = open(attack_fname, 'a')
+    kwargs = dict(file=f)
+
+    print("*********", **kwargs)
+    print(datetime.now(), **kwargs)
+    print("=> Stats:", **kwargs)
+    print(f"Dataset: {dataset}", **kwargs)
+    print(f"Success Rate: {(success_rate*100):.2f}% || {len(adv_samples)}/{total_samples}", **kwargs)
+    print(f"Mean const: {cosnt_mean:.3f}", **kwargs)
+    print(f"Mean l2: {cosnt_l2:.2f}", **kwargs)
 
 def plot_l2(l2_list, iterations):
     mean_l2 = [np.mean(l2_list)]*len(l2_list)
@@ -23,7 +39,7 @@ def plot_l2(l2_list, iterations):
     plt.plot(x, l2_list, label='l2', marker='o')
     plt.plot(x, mean_l2, label="mean", linestyle="--")
     legend = plt.legend(loc='upper right')
-    plt.savefig(f"l2_distance_{iterations}.png")
+    plt.savefig(f"{datetime.now()}_l2_distance.png")
 
 
 class BaseAttack():
@@ -70,7 +86,4 @@ class BaseAttack():
         return const, max_const, min_const, end_iters
 
     def attack(self, samples, targets):
-        raise NotImplementedError
-
-    def test_attack():
         raise NotImplementedError

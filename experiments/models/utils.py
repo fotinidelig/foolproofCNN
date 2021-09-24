@@ -1,11 +1,21 @@
 import matplotlib.pyplot as plt
 import time
+from datetime import datetime
 import os
 import numpy as np
 from typing import Optional
 import torch
 import torchvision
 from torch import nn
+
+## READ CONFIGURATION PARAMETERS
+# from config import config_params
+import configparser
+config = configparser.ConfigParser()
+config.read('config.ini')
+verbose = config.getboolean('general','verbose')
+train_fname = config.get('general','train_fname')
+attack_fname = config.get('general','attack_fname')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -78,13 +88,12 @@ class BasicModel(nn.Module):
 
 
     def predict(self, samples, logits = False):
-        # turn on evaluation mode, aka don't use dropout
         # check if x batch of samples or sample
         if len(samples.size()) < 4:
             samples = torch.reshape(samples, (1, *samples.size()))
 
         self.eval()
-        logs = self.forward(samples)
+        logs = self.forward(samples.float())
         if logits:
             return torch.argmax(logs, 1), logs
         softmax = torch.nn.Softmax(dim=1)
@@ -108,7 +117,7 @@ class BasicModel(nn.Module):
         optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum,
                                      nesterov = True, weight_decay=weight_decay)
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WIdeResNet
         criterion = nn.CrossEntropyLoss().to(device)
         batch_size = trainloader.batch_size
         loss_p_epoch = []
@@ -120,7 +129,7 @@ class BasicModel(nn.Module):
             for i, batch in enumerate(trainloader, 0):
                 data = batch[0].to(device)
                 targets = batch[1].to(device)
-                pred = self.forward(data)
+                pred = self.forward(data.float())
                 loss = criterion(pred, targets)
                 loss.backward()
                 optimizer.step()
@@ -131,7 +140,9 @@ class BasicModel(nn.Module):
             epoch_time = time.time()-start_time
             cur_lr = optimizer.param_groups[0]["lr"]
             scheduler.step()
-            print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%(epoch, loss.item(), cur_lr, epoch_time/60))
+            if verbose:
+                print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
+                        (epoch, loss.item(), cur_lr, epoch_time/60))
             # if epoch%5 == 0:
             #     learning_curve(iters, losses, epoch, cur_lr)
         if kwargs['filename']:
@@ -142,18 +153,26 @@ class BasicModel(nn.Module):
 
 
     def _test(self, testloader):
+        self.cpu()
         accuracy = 0
         for i, (samples, targets) in enumerate(testloader, 0):
-            samples = samples.to(device)
-            targets = targets.to(device)
+            samples = samples
+            targets = targets
             labels, probs = self.predict(samples)
             accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
 
         total = testloader.batch_size * (i+1)
         accuracy = float(accuracy/total)
-        print("**********************")
-        print("Test accuracy: %.2f"%(accuracy*100),"%")
+        return accuracy
 
+def write_output(model, accuracy, lr, lr_decay):
+    f = open(train_fname, 'a')
+    kwargs = dict(file=f)
+    print("<==>", **kwargs)
+    print(datetime.now(), **kwargs)
+    print(f"Model {model.__class__.__name__}, LR {lr}, LR_DECAY {lr_decay}", **kwargs)
+    print("Test accuracy: %.2f"%(accuracy*100),"%", **kwargs)
+    print("=><=", **kwargs)
 
 def learning_curve(iters, losses, epoch, lr, batch_size, filename):
     plt.clf()
@@ -171,10 +190,10 @@ def print_named_weights_sum(model, p_name = None):
             print(param.sum().cpu().data)
 
 # change fc2 layer to the desired layer name
-def debug_activations(model):
+def debug_activations(model, layer):
     activation = {}
     def get_activation(name):
         def hook(model, input, output):
             activation[name] = output.detach()
         return hook
-    model.fc2.register_forward_hook(get_activation('fc2'))
+    model[layer].register_forward_hook(get_activation(layer))

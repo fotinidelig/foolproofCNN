@@ -3,11 +3,12 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 import torchvision
-from .utils import BasicConv2D, BasicLinear, WideResBlock, BasicModel
+from .utils import BasicConv2D, BasicLinear, WideResBlock, BasicModel, verbose
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 from typing import Optional
+
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -39,7 +40,8 @@ class CWCIFAR10(BasicModel):
         self.fc2 = BasicLinear(256, 256)
         self.fc3 = BasicLinear(256, 10)
         self.dropout = nn.Dropout(p=.5)
-        print("\n", self)
+        if verbose:
+            print("\n", self)
 
 
     def forward(self, x):
@@ -47,7 +49,7 @@ class CWCIFAR10(BasicModel):
         if len(x.size()) < 4:
             x = torch.reshape(x,(1,*(x.size())))
 
-        out = self.conv11(x)
+        out = self.conv11(x.float())
         out = self.conv12(out)
         out = self.mp(out)
         out = self.conv21(out)
@@ -84,7 +86,8 @@ class CWMNIST(CWCIFAR10):
         self.fc2 = BasicLinear(200, 200)
         self.fc3 = BasicLinear(200, 10)
         self.dropout = nn.Dropout(p=.5)
-        print("\n", self)
+        if verbose:
+            print("\n", self)
 
 #################
 ## Wide ResNet ##
@@ -98,9 +101,9 @@ class WideResNet(BasicModel):
     '''
     def __init__(
         self,
-        i_channels: Optional[int] = 3,
-        depth: Optional[int] = 16,
-        width: Optional[int] = 1
+        i_channels = 3,
+        depth = 16,
+        width = 1
     ):
         super(WideResNet, self).__init__()
         assert (depth-4)%6 == 0, 'depth should be 6n+4'
@@ -116,14 +119,15 @@ class WideResNet(BasicModel):
         self.group4 = WideResBlock(N, widths[2], widths[3], 3, stride=2)
         self.bn1 = nn.BatchNorm2d(widths[3])
         self.fc = BasicLinear(64*width, 10)
-        print("\n", self)
+        if verbose:
+            print("\n", self)
 
     def forward(self, x):
         # check if x batch of samples or sample
         if len(x.size()) < 4:
             x = torch.reshape(x,(1,*(x.size())))
 
-        out = self.conv1(x)
+        out = self.conv1(x.float())
         out = self.group2(out)
         out = self.group3(out)
         out = self.group4(out)

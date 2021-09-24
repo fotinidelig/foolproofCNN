@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional
+import torch
+import torchvision.transforms as T
+from torchvision.datasets import MNIST, CIFAR10
 
 def show_sample(
     dataset,
@@ -37,16 +40,26 @@ def normalize(data: torch.tensor):
     dims = (0,1,2) if len(data.shape) == 3 else 0
     mean = data.float().mean(dims)
     std =  data.float().std(dims)
-    return transforms.Normalize((*mean,), (*std,))
+    return T.Normalize((*mean,), (*std,))
 
-def load_data(dataclass, batch_size = 128, num_workers = 1, root = './data'):
+def load_data(dataclass, augment, batch_size = 128, num_workers = 2, root = './data'):
     '''
         Loads CIFAR10 or MNIST datasets and converts
         image range from [0,1] to [-0.5,0.5]
     '''
     mean = (.5,.5,.5) if dataclass != MNIST else (.5)
     std = (1,1,1) if dataclass != MNIST else (1)
-    transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean, std)])
+    transform_standard = T.Compose([T.ToTensor(),T.Normalize(mean, std)])
+    transform_augment = T.Compose([
+            T.ToTensor(),
+            T.Normalize(mean, std),
+            T.Pad(4, padding_mode='reflect'),
+            T.RandomHorizontalFlip(),
+            T.RandomCrop(32),
+            T.RandomHorizontalFlip()])
+
+    transform = transform_augment if augment else transform_standard
+
     trainset = dataclass(root=root, train=True,
                        download=True, transform=transform)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
@@ -58,6 +71,6 @@ def load_data(dataclass, batch_size = 128, num_workers = 1, root = './data'):
                        shuffle=False, num_workers=num_workers, pin_memory=True)
 
     print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE: %d \n Classes: %d \n"%
-          ("Cifar10",trainset.__len__(),testset.__len__(), batch_size, len(trainset.classes)))
+          (dataclass.__class__.__name__,trainset.__len__(),testset.__len__(), batch_size, len(trainset.classes)))
 
     return trainset, trainloader, testset, testloader
