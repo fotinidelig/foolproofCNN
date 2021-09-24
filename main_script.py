@@ -12,7 +12,7 @@ import time
 # import experiments
 from experiments.models.utils import write_output
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
-from experiments.attacks.l2attack import L2Attack
+from experiments.attacks.l2attack import attack_all
 from experiments.utils import load_data
 
 import torch
@@ -25,40 +25,46 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 
 
-def run_attack(net, targeted, sampleloader, const, conf, n_samples, max_iterations, n_classes):
-    # using cpu runs faster due to our gpu's memory bandwidth which makes moving data costly
-    net = net.to('cpu')
+def run_attack(net, device, targeted, sampleloader, n_samples, batch, n_classes, **kwargs):
     input_imgs = []
     input_labs = []
     dataiter = iter(sampleloader)
 
+    net = net.to(device)
     i = 0
     while i < n_samples:
         data = dataiter.next()
         img = torch.reshape(data[0],data[0].size()[1:])
         label = int(data[1][0])
-        if net.predict(img)[0][0] == label:
+
+        if net.predict(img.to(device))[0][0] == label:
             i+=1
             input_imgs.append(img)
             input_labs.append(label)
 
-    attack = L2Attack(sampleloader.dataset, const, conf, max_iterations)
     iterations = 1 if not targeted else n_classes
+
     for i in range(iterations):
         print(f"\n=> Running attack with {n_samples} samples.")
-        torch.cuda.empty_cache() # empty cache before attack
+        # torch.cuda.empty_cache() # empty cache before attack
         target = i if targeted else -1 # target class
+
         inputset = TensorDataset(torch.stack(input_imgs),
                                 torch.tensor([target for i in range(len(input_imgs))]))
-        inputloader = DataLoader(inputset, batch_size=10,
+        inputloader = DataLoader(inputset, batch_size=batch,
                                 shuffle=False, num_workers=2)
-        attack.attack(net, targeted, inputloader, input_labs)
 
-    with torch.no_grad():
-        advloader = DataLoader(attack.advset, batch_size=10,
-                                shuffle=False, num_workers=2)
-        net._test(advloader)
-    return attack
+        dataname = sampleloader.dataset.__class__.__name__
+        classes = sampleloader.dataset.classes
+
+        attack_all(net, inputloader, targeted, classes, dataname,
+                    **kwargs)
+
+    # with torch.no_grad():
+    #     advloader = DataLoader(attack.advset, batch_size=10,
+    #                             shuffle=False, num_workers=2)
+    #     net._test(advloader)
+    return None
 
 
 def main():
@@ -83,15 +89,19 @@ def main():
     parser.add_argument('--lr-decay',dest='lr_decay', default=0.95, type=float,
                          help='learning rate (exponential) decay')
     # WideResNet
-    parser.add_argument('--depth', default=28, type=int,
+    parser.add_argument('--depth', default=40, type=int,
                         help='total number of conv layers in a WideResNet')
     parser.add_argument('--width', default=2, type=int,
                         help='width of a WideResNet')
     # Attack
     parser.add_argument('--attack', dest='run_attack',  action='store_const', const=True,
                          default=False, help='run attack on defined model')
+    parser.add_argument('--cpu', action='store_const', const=True,
+                         default=False, help='run attack on cpu, not cuda')
     parser.add_argument('--n_samples', default=20, type=int,
-                        help='nummber of samples to attack')
+                        help='number of samples to attack')
+    parser.add_argument('--a_batch', default=2, type=int,
+                       help='batch size for attack')
     parser.add_argument('--targeted', action='store_const', const=True,
                          default=False, help='run targeted attack on all classes')
     args = parser.parse_args()
@@ -122,9 +132,9 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if device == 'cuda':
         torch.cuda.empty_cache()
-        print("=> Using device: %s"%device)
+        print("=> Using device: %s."%device)
     else:
-        print("Using CPU instead")
+        print("Using CPU instead.")
 
     if args.model == "cwcifar10":
         net = CWCIFAR10()
@@ -134,10 +144,9 @@ def main():
         net = WideResNet(i_channels=3, depth=args.depth, width=args.width)
 
     net = net.to(device)
-
     if args.pretrained:
         print("\n=> Using pretrained model.")
-        net.load_state_dict(torch.load(f"pretrained/{net.__class__.__name__}.pt"))
+        net.load_state_dict(torch.load(f"pretrained/{net.__class__.__name__}.pt", map_location=torch.device('cpu')))
     else:
         print("\n=> Training...")
         start_time = time.time()
@@ -152,12 +161,16 @@ def main():
     ############
     ## Attack ##
     ############
-
+    if args.cpu:
+        device = 'cpu'
     if args.run_attack:
+        n_classes=len(trainset.classes)
+        # n_classes=3
         sampleloader = torch.utils.data.DataLoader(testset, batch_size=1,
                                                  shuffle=True, num_workers=NUM_WORKERS)
-        attack = run_attack(net, args.targeted, sampleloader, const=.01, conf=0, n_samples=args.n_samples,
-                            max_iterations=5000, n_classes=len(trainset.classes))
+        attack = run_attack(net, device, args.targeted, sampleloader, n_samples=args.n_samples,
+                            batch=args.a_batch, n_classes=n_classes)
+                            # lr=0.005, max_iterations=2000)
 
 if __name__ == "__main__":
     main()
