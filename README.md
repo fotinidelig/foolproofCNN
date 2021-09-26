@@ -14,4 +14,4 @@ Attacks:
 - FGSM, PGD Attack: [I. Goodfellow, J. Shlens and C. Szegedy, "Explaining and Harnessing Adversarial Examples" 2015 International Conference on Learning Representations (ICLR), 2015.](https://arxiv.org/abs/1412.6572v3)
 
 Defences:
-- [H. Zhang, Y. Yu, J. Jiao, E. P. Xing, L. El Ghaoui and M. I. Jordan, "Theoretically Principled Trade-off between Robustness and Accuracy" 2019 International Conference on Machine Learning, 2019.](https://arxiv.org/pdf/1901.08573.pdf)
+- TRADES: [H. Zhang, Y. Yu, J. Jiao, E. P. Xing, L. El Ghaoui and M. I. Jordan, "Theoretically Principled Trade-off between Robustness and Accuracy" 2019 International Conference on Machine Learning, 2019.](https://arxiv.org/pdf/1901.08573.pdf)
