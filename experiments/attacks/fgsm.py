@@ -48,6 +48,8 @@ def fgsm(
     assert norm in [np.inf, 1, 2], "To run FGSM attack, norm must be np.inf, 1, or 2."
     assert len(x.size()) == 4, "Function accepts elements in batches"
 
+    net.eval()
+
     if not targeted:
         target = torch.argmax(net.forward(x))
 
@@ -61,14 +63,5 @@ def fgsm(
 
     perturb = clip(x.grad, eps, norm)
     adv_x = x + perturb
-
     adv_x = torch.clamp(adv_x, x_min, x_max)
     return adv_x
-
-def succeeded(net, adv_x, label, target=None):
-    x_pred = net.predict(adv_x)[0][0]
-    success = (target == x_pred) if target else (label != x_pred)
-    if success:
-        print("=> Found attack.")
-    else:
-        print("=> Didn't find attack.")

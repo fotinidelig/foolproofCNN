@@ -21,7 +21,6 @@ from torchvision.datasets import CIFAR10, MNIST
 from torch import nn
 import torch.nn.functional as F
 
-import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 
 
@@ -59,11 +58,6 @@ def run_attack(net, device, targeted, sampleloader, n_samples, batch, n_classes,
 
         attack_all(net, inputloader, targeted, classes, dataname,
                     **kwargs)
-
-    # with torch.no_grad():
-    #     advloader = DataLoader(attack.advset, batch_size=10,
-    #                             shuffle=False, num_workers=2)
-    #     net._test(advloader)
     return None
 
 
@@ -94,13 +88,13 @@ def main():
     parser.add_argument('--width', default=2, type=int,
                         help='width of a WideResNet')
     # Attack
-    parser.add_argument('--attack', dest='run_attack',  action='store_const', const=True,
+    parser.add_argument('--attack',  action='store_const', const=True,
                          default=False, help='run attack on defined model')
     parser.add_argument('--cpu', action='store_const', const=True,
                          default=False, help='run attack on cpu, not cuda')
     parser.add_argument('--n_samples', default=20, type=int,
                         help='number of samples to attack')
-    parser.add_argument('--a_batch', default=2, type=int,
+    parser.add_argument('--a_batch', default=50, type=int,
                        help='batch size for attack')
     parser.add_argument('--targeted', action='store_const', const=True,
                          default=False, help='run targeted attack on all classes')
@@ -144,6 +138,7 @@ def main():
         net = WideResNet(i_channels=3, depth=args.depth, width=args.width)
 
     net = net.to(device)
+
     if args.pretrained:
         print("\n=> Using pretrained model.")
         net.load_state_dict(torch.load(f"pretrained/{net.__class__.__name__}.pt", map_location=torch.device('cpu')))
@@ -156,21 +151,23 @@ def main():
 
     with torch.no_grad():
         accuracy = net._test(testloader)
-        write_output(net, accuracy, args.lr, args.lr_decay)
+        if not args.attack:
+            write_output(net, accuracy, args.lr, args.lr_decay)
 
     ############
     ## Attack ##
     ############
     if args.cpu:
         device = 'cpu'
-    if args.run_attack:
+    if args.attack:
+        assert args.n_samples % args.a_batch == 0, "A_batch must divide N_samples"
         n_classes=len(trainset.classes)
         # n_classes=3
         sampleloader = torch.utils.data.DataLoader(testset, batch_size=1,
-                                                 shuffle=True, num_workers=NUM_WORKERS)
+                                                 shuffle=False, num_workers=NUM_WORKERS)
         attack = run_attack(net, device, args.targeted, sampleloader, n_samples=args.n_samples,
-                            batch=args.a_batch, n_classes=n_classes)
-                            # lr=0.005, max_iterations=2000)
+                            batch=args.a_batch, n_classes=n_classes,
+                            lr=0.01, max_iterations=1000)
 
 if __name__ == "__main__":
     main()

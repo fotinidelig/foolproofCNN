@@ -97,7 +97,8 @@ class WideResNet(BasicModel):
     '''
         Wide Residual Network architecture,
         see paper arxiv.org/abs/1605.07146
-        by S Zagoruyko, N Komodakis
+        by S Zagoruyko, N Komodakis.
+        Achieved accuracy ~91%
     '''
     def __init__(
         self,
@@ -114,11 +115,11 @@ class WideResNet(BasicModel):
         # group 1
         self.conv1 = nn.Conv2d(i_channels, widths[0], kernel_size=3, padding=1)
 
-        self.group2 = WideResBlock(N, widths[0], widths[1], 3)
+        self.group2 = WideResBlock(N, widths[0], widths[1], 3, stride=1)
         self.group3 = WideResBlock(N, widths[1], widths[2], 3, stride=2)
         self.group4 = WideResBlock(N, widths[2], widths[3], 3, stride=2)
         self.bn1 = nn.BatchNorm2d(widths[3])
-        self.fc = BasicLinear(64*width, 10)
+        self.fc = BasicLinear(widths[3], 10)
         if verbose:
             print("\n", self)
 

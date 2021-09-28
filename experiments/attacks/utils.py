@@ -14,7 +14,7 @@ config.read('config.ini')
 verbose = config.getboolean('general','verbose')
 attack_fname = config.get('general','attack_fname')
 
-def write_output(total_cnt, adv_cnt, const_list, l2_list, dataset):
+def write_output(total_cnt, adv_cnt, const_list, l2_list, dataset, model, lr, iterations, time):
     success_rate = float(adv_cnt)/total_cnt
     cosnt_mean = np.mean(const_list) if len(const_list) > 0 else -1
     cosnt_l2 = np.mean(l2_list) if len(l2_list) > 0 else -1
@@ -25,7 +25,11 @@ def write_output(total_cnt, adv_cnt, const_list, l2_list, dataset):
     print("*********", **kwargs)
     print(datetime.now(), **kwargs)
     print("=> Stats:", **kwargs)
+    print(f"Total time: {time}", **kwargs)
     print(f"Dataset: {dataset}", **kwargs)
+    print(f"Model: {model}", **kwargs)
+    print(f"lr: {lr} iterations: {iterations}", **kwargs)
+    print(f"const_all{const_list}", **kwargs)
     print(f"Success Rate: {(success_rate*100):.2f}% || {adv_cnt}/{total_cnt}", **kwargs)
     print(f"Mean const: {cosnt_mean:.3f}", **kwargs)
     print(f"Mean l2: {cosnt_l2:.2f}", **kwargs)

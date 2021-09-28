@@ -3,7 +3,6 @@ import time
 from datetime import datetime
 import os
 import numpy as np
-from typing import Optional
 import torch
 import torchvision
 from torch import nn
@@ -44,8 +43,8 @@ class BasicLinear(nn.Module):
         return out
 
 class BasicResBlock(nn.Module):
-    ## BN -> RELU -> CONV
-    def __init__(self, i_channels, o_channels, kernel_size, stride = 1, no_id_map = False):
+    ## BN -> RELU -> CONV (x2)
+    def __init__(self, i_channels, o_channels, kernel_size, stride = 1):
         super(BasicResBlock, self).__init__()
 
         self.sameInOut = (i_channels == o_channels)
@@ -58,6 +57,16 @@ class BasicResBlock(nn.Module):
         conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, padding=1, stride=1)
         self.seqRes = nn.Sequential(bn1, relu1, conv1, bn2, relu2, conv2)
         self.id_conv = nn.Conv2d(i_channels, o_channels, 1, stride=stride)
+
+        # Initialization as found in vision::torchvision::models::resnet.py
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                m.bias.data.zero_()
 
     def forward(self, x):
         out = self.seqRes(x)
@@ -106,7 +115,7 @@ class BasicModel(nn.Module):
         trainloader,
         lr = .01,
         lr_decay = 1, # set to 1 for no effect
-        epochs = 35,
+        epochs = 40,
         momentum = .9,
         weight_decay = 5e-4,
         **kwargs
@@ -117,7 +126,7 @@ class BasicModel(nn.Module):
         optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum,
                                      nesterov = True, weight_decay=weight_decay)
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WIdeResNet
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WideResNet
         criterion = nn.CrossEntropyLoss().to(device)
         batch_size = trainloader.batch_size
         loss_p_epoch = []
@@ -136,10 +145,13 @@ class BasicModel(nn.Module):
                 optimizer.zero_grad()
                 iters.append(i)
                 losses.append(float(loss.item()))
+
+            # if epoch%5 == 0:
+            scheduler.step()
+
             loss_p_epoch.append(float(loss.item()))
             epoch_time = time.time()-start_time
             cur_lr = optimizer.param_groups[0]["lr"]
-            scheduler.step()
             if verbose:
                 print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
                         (epoch, loss.item(), cur_lr, epoch_time/60))

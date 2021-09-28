@@ -66,7 +66,7 @@ def load_data(dataclass, augment, batch_size = 128, num_workers = 2, root = './d
                        shuffle=True, num_workers=num_workers, pin_memory=True)
 
     testset = dataclass(root=root, train=False,
-                       download=True, transform=transform)
+                       download=True, transform=transform_standard)
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                        shuffle=False, num_workers=num_workers, pin_memory=True)
 

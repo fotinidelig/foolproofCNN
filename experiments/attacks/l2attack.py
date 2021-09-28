@@ -22,7 +22,6 @@ def loss(const, conf, adv_sample, input, logits, targeted, target):
     """
     N = input.size(0)
     max_ = torch.tensor([0]*N).to(input.device)
-
     f_i = torch.stack([
             max([logits[i][j] for j in range(len(logits[0])) if j != target[i]]) for i in range(N)
             ])
@@ -46,6 +45,7 @@ def attack_all(
     indices_all = []
     cnt_adv = 0
     cnt_all = 0
+    total_time = 0
 
     device = next(net.parameters()).device
 
@@ -55,7 +55,8 @@ def attack_all(
 
         start_time = tm.time()
         vals = l2attack(net, inputs, targeted, targets, **kwargs)
-        total_time = tm.time()-start_time
+        batch_time = tm.time()-start_time
+        total_time+=batch_time/60
 
         best_atck = vals[0]
         l2_all += vals[1]
@@ -64,7 +65,7 @@ def attack_all(
         cnt_adv += len(indices)
         cnt_all += len(best_atck)
 
-        print("\n=> Attack took %f mins"%(total_time/60))
+        print("\n=> Attack took %f mins"%(batch_time/60))
         print(f"Found attack for {len(indices)}/{len(best_atck)} samples.")
 
         for i in indices:
@@ -80,7 +81,7 @@ def attack_all(
     kwargs = dict(lr=lr,iterations=iterations)
 
     write_output(cnt_all, cnt_adv, const_all, l2_all,
-                dataname, net.__class__.__name__, **kwargs)
+                dataname, net.__class__.__name__, time=total_time, **kwargs)
 
 
 def l2attack(
@@ -149,7 +150,7 @@ def l2attack(
     best_w_n = torch.zeros_like(x).to(device)
 
     inv_input = torch.atanh((x-TO_ADD)/TO_MUL)
-    eps = torch.tensor(np.random.uniform(-0.001, 0.001, x.shape)).to(device) # random noise in range [-0.03, 0.03]
+    eps = torch.tensor(np.random.uniform(-0.03, 0.03, x.shape)).to(device) # random noise in range [-0.03, 0.03]
     w_n = (inv_input+eps).clone().detach().requires_grad_(True)
 
     for _ in range(bin_steps):
@@ -174,7 +175,7 @@ def l2attack(
 
         # update parameters
         w_n = w_n.clone().detach()
-        eps.data = torch.tensor(np.random.uniform(-0.001, 0.001, w_n.shape), device=device)
+        eps.data = torch.tensor(np.random.uniform(-0.003, 0.003, w_n.shape), device=device)
 
         for i in range(N):
             # store best attack so far
