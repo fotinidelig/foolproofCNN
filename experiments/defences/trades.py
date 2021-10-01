@@ -1,8 +1,6 @@
 import time
-import os
 import numpy as np
 import torch
-import torchvision
 from torch import nn
 from experiments.models.utils import learning_curve
 
@@ -39,7 +37,7 @@ def clip(x, eps, norm, pgd_proj=False):
         clipped = N_mul(x, eps/sq_norm) if not pgd_proj else N_mul(x, torch.min(min_, eps/sq_norm))
     return clipped
 
-def train(
+def train_trades(
         net,
         _lambda,
         norm,

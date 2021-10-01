@@ -3,8 +3,6 @@
 ## Imports
 import argparse
 import numpy as np
-import os
-import matplotlib.pyplot as plt
 import time
 
 # import experiments
@@ -14,7 +12,6 @@ from experiments.attacks.l2attack import attack_all
 from experiments.utils import load_data
 
 import torch
-import torchvision
 from torchvision.datasets import CIFAR10, MNIST
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 

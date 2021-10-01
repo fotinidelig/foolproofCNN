@@ -1,8 +1,4 @@
 import os
-import torch
-import torchvision
-from torch import nn
-from typing import Optional, Callable
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime

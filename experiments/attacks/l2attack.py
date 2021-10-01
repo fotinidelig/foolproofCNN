@@ -1,7 +1,6 @@
 from datetime import datetime
 import os
 import torch
-import matplotlib.pyplot as plt
 import numpy as np
 from .utils import show_image, plot_l2, write_output, verbose
 import time as tm

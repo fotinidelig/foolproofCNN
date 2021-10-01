@@ -3,25 +3,16 @@
 ## Imports
 import argparse
 import numpy as np
-import os
-import random
-import matplotlib.pyplot as plt
-from typing import Optional, Callable
 import time
 
 # import experiments
 from experiments.models.utils import write_output
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
-from experiments.defences.trades import train
-from experiments.attacks.pgd import pgd
-from cleverhans.torch.attacks.projected_gradient_descent import projected_gradient_descent
+from experiments.defences.trades import train_trades
 from experiments.utils import load_data
 
 import torch
-import torchvision
 from torchvision.datasets import CIFAR10, MNIST
-from torch import nn
-import torch.nn.functional as F
 
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 
@@ -152,7 +143,7 @@ def main():
     else:
         print("\n=> Training with TRADES...")
         start_time = time.time()
-        train(net, args._lambda, args.norm, trainloader, lr=args.lr, lr_decay=args.lr_decay, epochs=args.epochs, filename="trades_train")
+        train_trades(net, args._lambda, args.norm, trainloader, lr=args.lr, lr_decay=args.lr_decay, epochs=args.epochs, filename="trades_train")
         train_time = time.time() - start_time
         print("\n=> [TOTAL TRADES TRAINING] %.4f mins."%(train_time/60))
 
