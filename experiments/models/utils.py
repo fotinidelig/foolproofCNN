@@ -177,14 +177,16 @@ class BasicModel(nn.Module):
         accuracy = float(accuracy/total)
         return accuracy
 
-def write_output(model, accuracy, lr, lr_decay):
+def write_output(model, accuracy, **kwargs):
     f = open(train_fname, 'a')
-    kwargs = dict(file=f)
-    print("<==>", **kwargs)
-    print(datetime.now(), **kwargs)
-    print(f"Model {model.__class__.__name__}, LR {lr}, LR_DECAY {lr_decay}", **kwargs)
-    print("Test accuracy: %.2f"%(accuracy*100),"%", **kwargs)
-    print("=><=", **kwargs)
+    outputf = dict(file=f)
+    print("<==>", **outputf)
+    print(datetime.now(), **outputf)
+    print(f"Model {model.__class__.__name__}", **outputf)
+    for key, val in kwargs.item():
+        print(f"{key}: {val}", outputf)
+    print("Test accuracy: %.2f"%(accuracy*100),"%", **outputf)
+    print("=><=", **outputf)
 
 def learning_curve(iters, losses, epoch, lr, batch_size, filename):
     plt.clf()

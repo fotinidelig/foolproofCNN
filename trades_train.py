@@ -4,18 +4,25 @@
 import argparse
 import numpy as np
 import os
+import random
 import matplotlib.pyplot as plt
+from typing import Optional, Callable
 import time
 
 # import experiments
 from experiments.models.utils import write_output
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
-from experiments.attacks.l2attack import attack_all
+from experiments.defences.trades import train
+from experiments.attacks.pgd import pgd
+from cleverhans.torch.attacks.projected_gradient_descent import projected_gradient_descent
 from experiments.utils import load_data
 
 import torch
 import torchvision
 from torchvision.datasets import CIFAR10, MNIST
+from torch import nn
+import torch.nn.functional as F
+
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 
 
@@ -68,10 +75,15 @@ def main():
                          help='define dataset to train on or attack with')
     parser.add_argument('--augment', action='store_const', const=True,
                           default=False, help='apply augmentation on dataset')
+    parser.add_argument('--lambda', dest="_lambda", default=1, type=int, choices=[1, 6],
+                          help='lambda value for TRADES loss')
+    parser.add_argument('--norm', dest="norm", default=np.inf, type=int, choices=[np.inf, 2],
+                          help='norm for TRADES robust loss')
+
     # Model
     parser.add_argument('--model', default='cwcifar10', choices=['cwcifar10', 'cwmnist', 'wideresnet'],
                          help='define the model architecture you want to use')
-    parser.add_argument('--epochs', default=35, type=int,
+    parser.add_argument('--epochs', default=50, type=int,
                          help='training epochs')
     parser.add_argument('--lr', default=0.01, type=float,
                          help='initial learning rate')
@@ -136,17 +148,17 @@ def main():
 
     if args.pretrained:
         print("\n=> Using pretrained model.")
-        net.load_state_dict(torch.load(f"pretrained/{net.__class__.__name__}.pt", map_location=torch.device('cpu')))
+        net.load_state_dict(torch.load(f"pretrained/TRADES_{net.__class__.__name__}.pt", map_location=torch.device('cpu')))
     else:
-        print("\n=> Training...")
+        print("\n=> Training with TRADES...")
         start_time = time.time()
-        net._train(trainloader, epochs=args.epochs, lr=args.lr, lr_decay=args.lr_decay, filename="cifar10")
+        train(net, args._lambda, args.norm, trainloader, lr=args.lr, lr_decay=args.lr_decay, epochs=args.epochs, filename="trades_train")
         train_time = time.time() - start_time
-        print("\n=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
+        print("\n=> [TOTAL TRADES TRAINING] %.4f mins."%(train_time/60))
 
     with torch.no_grad():
         accuracy = net._test(testloader)
-        out_args = dict(LR=args.lr, LR_Decay=args.lr_decay, Runrime=train_time/60)
+        out_args = dict(LR=args.lr, LAMBDA=args._lambda, Runrime=train_time/60)
         if not args.attack:
             write_output(net, accuracy, out_args)
 
@@ -159,11 +171,11 @@ def main():
         assert args.n_samples % args.a_batch == 0, "A_batch must divide N_samples"
         n_classes=len(trainset.classes)
         # n_classes=3
-        sampleloader = DataLoader(testset, batch_size=1,
-                                                 shuffle=False, num_workers=NUM_WORKERS)
+        sampleloader = torch.utils.data.DataLoader(testset, batch_size=1,
+                                                 shuffle=True, num_workers=NUM_WORKERS)
         attack = run_attack(net, device, args.targeted, sampleloader, n_samples=args.n_samples,
-                            batch=args.a_batch, n_classes=n_classes,
-                            lr=0.01, max_iterations=1000)
+                            batch=args.a_batch, n_classes=n_classes)
+                            # lr=0.01, max_iterations=5000)
 
 if __name__ == "__main__":
     main()
