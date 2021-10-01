@@ -6,13 +6,6 @@ import numpy as np
 from .utils import show_image, plot_l2, write_output, verbose
 import time as tm
 
-# Constraints for image pixel values
-BOXMIN = -0.5
-BOXMAX = 0.5
-# calculations to constrain tanh() within [BOXMIN, BOXMAX]
-TO_MUL = .5*(BOXMAX - BOXMIN)
-TO_ADD = .5*(BOXMAX + BOXMIN)
-
 EARLY_STOP = True # stop optimizing the loss early
 
 def loss(const, conf, adv_sample, input, logits, targeted, target):
@@ -59,6 +52,7 @@ def attack_all(
         total_time+=batch_time/60
 
         best_atck = vals[0]
+        best_atck_all+=best_atck
         l2_all += vals[1]
         const_all += vals[2]
         indices = vals[3]
@@ -82,7 +76,7 @@ def attack_all(
 
     write_output(cnt_all, cnt_adv, const_all, l2_all,
                 dataname, net.__class__.__name__, time=total_time, **kwargs)
-
+    return best_atck_all
 
 def l2attack(
         net,
@@ -95,7 +89,9 @@ def l2attack(
         conf=0,
         bin_steps=10,
         max_iterations=1000,
-        lr=0.01
+        lr=0.01,
+        x_min = -0.5,
+        x_max = 0.5
     ):
     """
         Input tensor X of N images and Target of N targets (if targeted),
@@ -104,7 +100,7 @@ def l2attack(
     def bin_search_const(const_i, max_const_i, min_const_i, fx):
         """
             Binary search for const in range
-            [min_const, max_const].
+            [min_const_i, max_const_i].
 
             Return smallest const for which f(x) moves to 0
             or end search if const is found.
@@ -135,6 +131,10 @@ def l2attack(
     const_vals = []
     indices = []
 
+# calculations to constrain tanh() within [BOXMIN, BOXMAX]
+    TO_MUL = .5*(x_max - x_min)
+    TO_ADD = .5*(x_max + x_min)
+
     if not targeted:
         target, _ = net.predict(x)
 
@@ -146,12 +146,12 @@ def l2attack(
     found_atck_n = [False]*N
     best_atck_n = x.clone().detach()
     best_const_n = torch.zeros(N)
-    best_l2_n = torch.zeros(N)
     best_w_n = torch.zeros_like(x).to(device)
 
-    inv_input = torch.atanh((x-TO_ADD)/TO_MUL)
     eps = torch.tensor(np.random.uniform(-0.03, 0.03, x.shape)).to(device) # random noise in range [-0.03, 0.03]
-    w_n = (inv_input+eps).clone().detach().requires_grad_(True)
+    input = (x+eps).clamp(min=x_min, max=x_max) # control for arctanh NaN values
+    inv_input = torch.atanh((input-TO_ADD)/TO_MUL)
+    w_n = (inv_input).clone().detach().requires_grad_(True)
 
     for _ in range(bin_steps):
         params = [{'params': w_n}]
@@ -185,7 +185,6 @@ def l2attack(
                     indices.append(i)
                 best_atck_n[i] = adv_sample_n[i].detach().clone()
                 best_const_n[i] = const_n[i].clone().item()
-                best_l2_n[i] = torch.norm(adv_sample_n[i] - x[i]).item()
                 best_w_n[i] = w_n[i].clone().detach()
 
             vals = bin_search_const(const_n[i].item(), max_const_n[i].item(), min_const_n[i].item(), fx_n[i])
@@ -197,4 +196,5 @@ def l2attack(
                 w_n[i] = inv_input[i]+eps[i]
         w_n = w_n.requires_grad_(True)
 
+    best_l2_n = torch.norm(best_atck_n - x, dim=list(range(len(x.shape))[2:])).norm(dim=1).tolist()
     return best_atck_n, best_l2_n, best_const_n, indices
