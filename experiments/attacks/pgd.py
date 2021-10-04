@@ -89,8 +89,7 @@ def pgd(
         adv_x = x + perturb
         adv_x = torch.clamp(adv_x, x_min, x_max)
 
-    l2 = (adv_x - x).clone().detach()
-    return adv_x, l2
+    return adv_x
 
 def pgd_inf(
     net: nn.Module,
@@ -133,8 +132,7 @@ def pgd_inf(
         adv_x = x + clipped
         adv_x = torch.clamp(adv_x, x_min, x_max)
 
-    l2 = torch.norm(adv_x - x, dim=1)
-    return adv_x, l2
+    return adv_x
 
 
 def succeeded(net, adv_x, label, target=None):

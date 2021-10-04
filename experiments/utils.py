@@ -71,6 +71,6 @@ def load_data(dataclass, augment, batch_size = 128, num_workers = 2, root = './d
                        shuffle=False, num_workers=num_workers, pin_memory=True)
 
     print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE: %d \n Classes: %d \n"%
-          (dataclass.__class__.__name__,trainset.__len__(),testset.__len__(), batch_size, len(trainset.classes)))
+          (dataclass.__name__,trainset.__len__(),testset.__len__(), batch_size, len(trainset.classes)))
 
     return trainset, trainloader, testset, testloader

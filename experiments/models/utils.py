@@ -5,6 +5,7 @@ import os
 import numpy as np
 import torch
 import torchvision
+import torch.nn.functional as F
 from torch import nn
 
 ## READ CONFIGURATION PARAMETERS
@@ -57,7 +58,7 @@ class BasicResBlock(nn.Module):
         conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, padding=1, stride=1)
         self.seqRes = nn.Sequential(bn1, relu1, conv1, bn2, relu2, conv2)
         self.id_conv = nn.Conv2d(i_channels, o_channels, 1, stride=stride)
-
+        self.id_bn = nn.BatchNorm2d(i_channels)
         # Initialization as found in vision::torchvision::models::resnet.py
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -70,7 +71,7 @@ class BasicResBlock(nn.Module):
 
     def forward(self, x):
         out = self.seqRes(x)
-        out += x if self.sameInOut else self.id_conv(x)
+        out += x if self.sameInOut else self.id_conv(F.relu(self.id_bn(x)))
         return out
 
 class WideResBlock(nn.Module):
@@ -183,13 +184,14 @@ def write_output(model, accuracy, **kwargs):
     print("<==>", **outputf)
     print(datetime.now(), **outputf)
     print(f"Model {model.__class__.__name__}", **outputf)
-    for key, val in kwargs.item():
-        print(f"{key}: {val}", outputf)
+    for key, val in kwargs.items():
+        print(f"{key}: {val}", **outputf)
     print("Test accuracy: %.2f"%(accuracy*100),"%", **outputf)
     print("=><=", **outputf)
 
 def learning_curve(iters, losses, epoch, lr, batch_size, filename):
     plt.clf()
+    plt.rcParams["font.family"] = "serif"
     plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
     plt.xlabel("Iterations")
     plt.ylabel("Loss")

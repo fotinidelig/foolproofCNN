@@ -25,7 +25,6 @@ def write_output(total_cnt, adv_cnt, const_list, l2_list, dataset, model, lr, it
     print(f"Dataset: {dataset}", **kwargs)
     print(f"Model: {model}", **kwargs)
     print(f"lr: {lr} iterations: {iterations}", **kwargs)
-    print(f"const_all{const_list}", **kwargs)
     print(f"Success Rate: {(success_rate*100):.2f}% || {adv_cnt}/{total_cnt}", **kwargs)
     print(f"Mean const: {cosnt_mean:.3f}", **kwargs)
     print(f"Mean l2: {l2_mean:.2f}", **kwargs)
@@ -40,6 +39,7 @@ def img_pipeline(imgs):
 
 def show_image(idx, adv_img, img, classes, fname='', l2=None, with_perturb=False):
     plt.clf()
+    plt.rcParams["font.family"] = "serif"
     ncols = 3 if with_perturb else 2
     fig, ax = plt.subplots(nrows=1,ncols=ncols, dpi=300, figsize=(7, 7))
     if l2:
@@ -91,6 +91,7 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
         ax.yaxis.set_ticklabels([])
 
     plt.clf()
+    plt.rcParams["font.family"] = "serif"
     N = len(adv_imgs)
     M = len(adv_imgs[0])
     fig, ax = plt.subplots(nrows=N,ncols=M, figsize=(M,N), dpi=300)

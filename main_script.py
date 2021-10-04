@@ -84,7 +84,7 @@ def main():
                          default=False, help='run attack on defined model')
     parser.add_argument('--cpu', action='store_const', const=True,
                          default=False, help='run attack on cpu, not cuda')
-    parser.add_argument('--n_samples', default=20, type=int,
+    parser.add_argument('--n_samples', default=100, type=int,
                         help='number of samples to attack')
     parser.add_argument('--a_batch', default=50, type=int,
                        help='batch size for attack')
@@ -130,22 +130,24 @@ def main():
         net = WideResNet(i_channels=3, depth=args.depth, width=args.width)
 
     net = net.to(device)
-
+    train_time = 0
     if args.pretrained:
         print("\n=> Using pretrained model.")
         net.load_state_dict(torch.load(f"pretrained/{net.__class__.__name__}.pt", map_location=torch.device('cpu')))
     else:
         print("\n=> Training...")
         start_time = time.time()
+        print(trainset.data[0].shape)
+        print(iter(trainloader).next()[0].shape)
         net._train(trainloader, epochs=args.epochs, lr=args.lr, lr_decay=args.lr_decay, filename="cifar10")
         train_time = time.time() - start_time
         print("\n=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
 
     with torch.no_grad():
         accuracy = net._test(testloader)
-        out_args = dict(LR=args.lr, LR_Decay=args.lr_decay, Runrime=train_time/60)
+        out_args = dict(LR=args.lr, LR_Decay=args.lr_decay, Runtime=train_time/60)
         if not args.attack:
-            write_output(net, accuracy, out_args)
+            write_output(net, accuracy, **out_args)
 
     ############
     ## Attack ##
@@ -157,7 +159,7 @@ def main():
         n_classes=len(trainset.classes)
         # n_classes=3
         sampleloader = DataLoader(testset, batch_size=1,
-                                                 shuffle=False, num_workers=NUM_WORKERS)
+                                                 shuffle=True, num_workers=NUM_WORKERS)
         attack = run_attack(net, device, args.targeted, sampleloader, n_samples=args.n_samples,
                             batch=args.a_batch, n_classes=n_classes,
                             lr=0.01, max_iterations=1000)

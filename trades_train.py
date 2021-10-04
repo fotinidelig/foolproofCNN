@@ -9,6 +9,8 @@ import time
 from experiments.models.utils import write_output
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
 from experiments.defences.trades import train_trades
+from experiments.attacks.l2attack import attack_all
+# from experiments.attacks.pgd import attack_all
 from experiments.utils import load_data
 
 import torch
@@ -66,7 +68,7 @@ def main():
                          help='define dataset to train on or attack with')
     parser.add_argument('--augment', action='store_const', const=True,
                           default=False, help='apply augmentation on dataset')
-    parser.add_argument('--lambda', dest="_lambda", default=1, type=int, choices=[1, 6],
+    parser.add_argument('--lambda', dest="_lambda", default=1, type=float,
                           help='lambda value for TRADES loss')
     parser.add_argument('--norm', dest="norm", default=np.inf, type=int, choices=[np.inf, 2],
                           help='norm for TRADES robust loss')
@@ -90,7 +92,7 @@ def main():
                          default=False, help='run attack on defined model')
     parser.add_argument('--cpu', action='store_const', const=True,
                          default=False, help='run attack on cpu, not cuda')
-    parser.add_argument('--n_samples', default=20, type=int,
+    parser.add_argument('--n_samples', default=100, type=int,
                         help='number of samples to attack')
     parser.add_argument('--a_batch', default=50, type=int,
                        help='batch size for attack')
@@ -136,7 +138,7 @@ def main():
         net = WideResNet(i_channels=3, depth=args.depth, width=args.width)
 
     net = net.to(device)
-
+    train_time = 0
     if args.pretrained:
         print("\n=> Using pretrained model.")
         net.load_state_dict(torch.load(f"pretrained/TRADES_{net.__class__.__name__}.pt", map_location=torch.device('cpu')))
@@ -149,9 +151,9 @@ def main():
 
     with torch.no_grad():
         accuracy = net._test(testloader)
-        out_args = dict(LR=args.lr, LAMBDA=args._lambda, Runrime=train_time/60)
+        out_args = dict(LR=args.lr, Lambda=args._lambda, Runtime=train_time/60)
         if not args.attack:
-            write_output(net, accuracy, out_args)
+            write_output(net, accuracy, **out_args)
 
     ############
     ## Attack ##
