@@ -38,10 +38,18 @@ def img_pipeline(imgs):
     return npimgs
 
 def show_image(idx, adv_img, img, classes, fname='', l2=None, with_perturb=False):
+    def set_axis_style(ax):
+        ax.xaxis.set_ticklabels([])
+        ax.yaxis.set_ticklabels([])
+
     plt.clf()
     plt.rcParams["font.family"] = "serif"
     ncols = 3 if with_perturb else 2
-    fig, ax = plt.subplots(nrows=1,ncols=ncols, dpi=300, figsize=(7, 7))
+    fig, ax = plt.subplots(nrows=1,ncols=ncols, dpi=300, figsize=(7, 5))
+
+    set_axis_style(ax[0])
+    set_axis_style(ax[1])
+
     if l2:
         fig.suptitle(f'L2 distance: {l2:.3f}', fontsize=16)
 

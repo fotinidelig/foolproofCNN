@@ -4,56 +4,6 @@ import numpy as np
 
 from .fgsm import fgsm, clip
 
-def attack_all(
-        net,
-        sampleloader,
-        targeted,
-        classes,
-        dataname,
-        eps,
-        alpha,
-        norm,
-        n_iters,
-        **kwargs
-    ):
-    best_atck_all = []
-    l2_all = []
-    cnt_adv = 0
-    cnt_all = 0
-
-    device = next(net.parameters()).device
-
-    for bidx, batch in enumerate(sampleloader):
-        inputs = batch[0].to(device)
-        targets = batch[1].to(device) if targeted else None
-
-        start_time = tm.time()
-        vals = pgd(net, inputs, eps, alpha, norm, n_iters, targeted, targets, **kwargs)
-        total_time = tm.time()-start_time
-
-        best_atck = vals[0]
-        l2_all += vals[1]
-        cnt_all += len(best_atck)
-
-        indices = []
-        for i, advimg in enumerate(best_atck):
-            label = net.predict(inputs[i])[0][0]
-            if succeeded(net, advimg, label, targets[i] if targeted else None):
-                indices.append(i)
-        cnt_adv += len(indices)
-
-        print("\n=> Attack took %f mins"%(total_time/60))
-        print(f"Found attack for {len(indices)}/{len(best_atck)} samples.")
-
-        for i in indices:
-            label = net.predict(inputs[i])[0][0]
-            lab_atck = net.predict(best_atck[i])[0][0]
-            fname = 'targeted' if targeted else 'untargeted/' + "pgd/" + dataname
-            show_image(i, (best_atck[i], lab_atck), (inputs[i], label),
-                         classes, fname=fname, l2=vals[1][i])
-
-    write_output(cnt_all, cnt_adv, [], l2_all, dataname,
-                net.__class__.__name__, iterations=n_iters)
 
 def pgd(
     net: nn.Module,
@@ -133,6 +83,57 @@ def pgd_inf(
         adv_x = torch.clamp(adv_x, x_min, x_max)
 
     return adv_x
+
+def attack_all(
+    net,
+    sampleloader,
+    targeted,
+    classes,
+    dataname,
+    eps,
+    alpha,
+    norm,
+    n_iters,
+    **kwargs
+    ):
+    best_atck_all = []
+    l2_all = []
+    cnt_adv = 0
+    cnt_all = 0
+
+    device = next(net.parameters()).device
+
+    for bidx, batch in enumerate(sampleloader):
+        inputs = batch[0].to(device)
+        targets = batch[1].to(device) if targeted else None
+
+        start_time = tm.time()
+        vals = pgd(net, inputs, eps, alpha, norm, n_iters, targeted, targets, **kwargs)
+        total_time = tm.time()-start_time
+
+        best_atck = vals[0]
+        l2_all += vals[1]
+        cnt_all += len(best_atck)
+
+        indices = []
+        for i, advimg in enumerate(best_atck):
+            label = net.predict(inputs[i])[0][0]
+            if succeeded(net, advimg, label, targets[i] if targeted else None):
+                indices.append(i)
+                cnt_adv += len(indices)
+
+                print("\n=> Attack took %f mins"%(total_time/60))
+                print(f"Found attack for {len(indices)}/{len(best_atck)} samples.")
+
+                for i in indices:
+                    label = net.predict(inputs[i])[0][0]
+                    lab_atck = net.predict(best_atck[i])[0][0]
+                    fname = 'targeted' if targeted else 'untargeted/' + "pgd/" + dataname
+                    show_image(i, (best_atck[i], lab_atck), (inputs[i], label),
+                    classes, fname=fname, l2=vals[1][i])
+
+                    write_output(cnt_all, cnt_adv, [], l2_all, dataname,
+                    net.__class__.__name__, iterations=n_iters)
 
 
 def succeeded(net, adv_x, label, target=None):

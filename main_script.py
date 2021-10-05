@@ -86,6 +86,8 @@ def main():
                          default=False, help='run attack on cpu, not cuda')
     parser.add_argument('--n_samples', default=100, type=int,
                         help='number of samples to attack')
+    parser.add_argument('--a_lr', default=0.01, type=float,
+                       help="learning rate for attack optimization" )
     parser.add_argument('--a_batch', default=50, type=int,
                        help='batch size for attack')
     parser.add_argument('--targeted', action='store_const', const=True,
@@ -162,7 +164,7 @@ def main():
                                                  shuffle=True, num_workers=NUM_WORKERS)
         attack = run_attack(net, device, args.targeted, sampleloader, n_samples=args.n_samples,
                             batch=args.a_batch, n_classes=n_classes,
-                            lr=0.01, max_iterations=1000)
+                            lr=args.a_lr, max_iterations=1000)
 
 if __name__ == "__main__":
     main()
