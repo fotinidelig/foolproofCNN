@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from typing import Optional
-
+from torchvision.models import resnet18
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -140,3 +140,22 @@ class WideResNet(BasicModel):
 
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
         return logits
+
+
+def tiny_imagenet_model():
+    model = resnet18(pretrained=True)
+    for param in model.parameters():
+        param.requires_grad = False
+    model.fc = nn.Linear(512, 200)
+    print(model)
+    return model
+
+def finetune_params(model):
+    params_to_update = model.parameters()
+    print("Params to learn:")
+    params_to_update = []
+    for name,param in model_ft.named_parameters():
+        if param.requires_grad == True:
+            params_to_update.append(param)
+            print("\t",name)
+    return params_to_update

@@ -2,8 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional
 import torch
+from torch.utils.data import DataLoader
 import torchvision.transforms as T
-from torchvision.datasets import MNIST, CIFAR10
+from torchvision.datasets import MNIST, CIFAR10, ImageFolder
 
 def show_sample(
     dataset,
@@ -34,7 +35,7 @@ def show_sample(
 def normalize(data: torch.tensor):
     '''
         Calculates mean and std of a dataset
-        for each channels, and returns
+        for each channel, and returns
         a normalization transformation.
     '''
     dims = (0,1,2) if len(data.shape) == 3 else 0
@@ -74,3 +75,25 @@ def load_data(dataclass, augment, batch_size = 128, num_workers = 2, root = './d
           (dataclass.__name__,trainset.__len__(),testset.__len__(), batch_size, len(trainset.classes)))
 
     return trainset, trainloader, testset, testloader
+
+## TODO: Create new dataset class for tiny-imagenet-200
+def tiny_imagenet_loader(path = './data/tiny-imagenet-200/', batch_size = 128):
+    '''
+        Loads tiny-imagenet-200 dataset, which should be
+        downloaded from https://image-net.org/download-images.php
+        and extracted in path.
+    '''
+    # pre-calculated mean and std values
+    mean=[0.485, 0.456, 0.406]
+    std=[0.229, 0.224, 0.225]
+
+    transform = T.Compose([T.ToTensor(),T.Normalize(mean, std)])
+    val_images = ImageFolder(path+'val', transform=transform)
+    val_loader = DataLoader(val_images, batch_size=batch_size, shuffle=True)
+    train_images = ImageFolder(path+'train', transform=transform)
+    train_loader = DataLoader(train_images, batch_size=batch_size, shuffle=True)
+    test_images = ImageFolder(path+'test', transform=transform)
+    test_loader = DataLoader(test_images, batch_size=batch_size, shuffle=True)
+    print(dataloader.dataset.__class__.__name__) ## DEBUG:
+
+    return train_images, train_loader, test_images, test_loader

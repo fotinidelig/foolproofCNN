@@ -111,72 +111,76 @@ class BasicModel(nn.Module):
         return torch.argmax(probs, 1), probs
 
 
-    def _train(
-        self,
-        trainloader,
-        lr = .01,
-        lr_decay = 1, # set to 1 for no effect
-        epochs = 40,
-        momentum = .9,
-        weight_decay = 5e-4,
-        **kwargs
-    ):
-        # turn on training mode, necessary for dropout/batch_norm layers
-        self.train()
+def train(
+    model,
+    trainloader,
+    lr = .01,
+    lr_decay = 1, # set to 1 for no effect
+    epochs = 40,
+    momentum = .9,
+    weight_decay = 5e-4,
+    params_to_update = None,
+    **kwargs
+):
+    # turn on training mode, necessary for dropout/batch_norm layers
+    model.train()
 
-        optimizer = torch.optim.SGD(self.parameters(), lr = lr, momentum = momentum,
-                                     nesterov = True, weight_decay=weight_decay)
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WideResNet
-        criterion = nn.CrossEntropyLoss().to(device)
-        batch_size = trainloader.batch_size
-        loss_p_epoch = []
+    if not params_to_update:
+        params_to_update = model.parameters()
 
-        for epoch in range(epochs):
-            iters = []
-            losses = []
-            start_time = time.time()
-            for i, batch in enumerate(trainloader, 0):
-                data = batch[0].to(device)
-                targets = batch[1].to(device)
-                pred = self.forward(data.float())
-                loss = criterion(pred, targets)
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
-                iters.append(i)
-                losses.append(float(loss.item()))
+    optimizer = torch.optim.SGD(params_to_update, lr = lr, momentum = momentum,
+                                 nesterov = True, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WideResNet
+    criterion = nn.CrossEntropyLoss().to(device)
+    batch_size = trainloader.batch_size
+    loss_p_epoch = []
 
-            # if epoch%5 == 0:
-            scheduler.step()
+    for epoch in range(epochs):
+        iters = []
+        losses = []
+        start_time = time.time()
+        for i, batch in enumerate(trainloader, 0):
+            data = batch[0].to(device)
+            targets = batch[1].to(device)
+            pred = model(data.float())
+            loss = criterion(pred, targets)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            iters.append(i)
+            losses.append(float(loss.item()))
 
-            loss_p_epoch.append(float(loss.item()))
-            epoch_time = time.time()-start_time
-            cur_lr = optimizer.param_groups[0]["lr"]
-            if verbose:
-                print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
-                        (epoch, loss.item(), cur_lr, epoch_time/60))
-            # if epoch%5 == 0:
-            #     learning_curve(iters, losses, epoch, cur_lr)
-        if kwargs['filename']:
-            learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['filename'])
-        if not os.path.isdir('models'):
-            os.makedirs('models')
-        torch.save(self.state_dict(), f"pretrained/{self.__class__.__name__}.pt")
+        # if epoch%5 == 0:
+        scheduler.step()
+
+        loss_p_epoch.append(float(loss.item()))
+        epoch_time = time.time()-start_time
+        cur_lr = optimizer.param_groups[0]["lr"]
+        if verbose:
+            print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
+                    (epoch, loss.item(), cur_lr, epoch_time/60))
+        # if epoch%5 == 0:
+        #     learning_curve(iters, losses, epoch, cur_lr)
+    if kwargs['filename']:
+        learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['filename'])
+    if not os.path.isdir('models'):
+        os.makedirs('models')
+    torch.save(model.state_dict(), f"pretrained/{model.__class__.__name__}.pt")
 
 
-    def _test(self, testloader):
-        self.cpu()
-        accuracy = 0
-        for i, (samples, targets) in enumerate(testloader, 0):
-            samples = samples
-            targets = targets
-            labels, probs = self.predict(samples)
-            accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
+def test(model, testloader):
+    model.cpu()
+    accuracy = 0
+    for i, (samples, targets) in enumerate(testloader, 0):
+        samples = samples
+        targets = targets
+        labels, probs = model.predict(samples)
+        accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
 
-        total = testloader.batch_size * (i+1)
-        accuracy = float(accuracy/total)
-        return accuracy
+    total = testloader.batch_size * (i+1)
+    accuracy = float(accuracy/total)
+    return accuracy
 
 def write_output(model, accuracy, **kwargs):
     f = open(train_fname, 'a')
