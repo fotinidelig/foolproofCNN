@@ -5,6 +5,7 @@ Implemented with PyTorch.
 Datasets:
 - [CIFAR10](https://www.cs.toronto.edu/~kriz/cifar.html)
 - [MNIST](http://yann.lecun.com/exdb/mnist/)
+- [Tiny ImageNet](https://www.image-net.org/)
 
 Models:
 - [Wide Residual Networks](https://arxiv.org/abs/1605.07146)
