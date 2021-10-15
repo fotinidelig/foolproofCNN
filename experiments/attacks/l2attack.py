@@ -2,7 +2,7 @@ from datetime import datetime
 import os
 import torch
 import numpy as np
-from .utils import show_image, plot_l2, write_output, verbose
+from .utils import *
 import time as tm
 
 '''
@@ -161,6 +161,7 @@ def attack_all(
         targeted,
         classes,
         dataname,
+        save_attacks = False,
         **kwargs
     ):
     best_atck_all = []
@@ -192,14 +193,16 @@ def attack_all(
 
         print("\n=> Attack took %f mins"%(batch_time/60))
         print(f"Found attack for {len(indices)}/{len(best_atck)} samples.")
-        print(f"Mean const = {sum(vals[2])/len(indices)}")
-        print(f"Medean const = {np.median(vals[2])}")
+        # print(f"Mean const = {sum(vals[2])/len(indices)}") ## DEBUG:
+        # print(f"Medean const = {np.median(vals[2])}")### DEBUG:
         for i in indices:
             label = net.predict(inputs[i])[0][0]
             lab_atck = net.predict(best_atck[i])[0][0]
             fname = 'targeted' if targeted else 'untargeted/' + "cwl2/" + dataname
             show_image(i, (best_atck[i], lab_atck), (inputs[i], label),
                          classes, fname=fname, l2=vals[1][i])
+            if save_attacks:
+                save_images(best_atck[i], f'saved/{classes[lab_atck]}/', str(i))
 
     # DEBUG:
     lr = kwargs['lr'] if 'lr' in kwargs.keys() else 0.01

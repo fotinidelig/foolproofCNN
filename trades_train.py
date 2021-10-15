@@ -6,7 +6,7 @@ import numpy as np
 import time
 
 # import experiments
-from experiments.models.utils import write_output
+from experiments.models.utils import write_output, test
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
 from experiments.defences.trades import train_trades
 from experiments.attacks.l2attack import attack_all
@@ -150,7 +150,7 @@ def main():
         print("\n=> [TOTAL TRADES TRAINING] %.4f mins."%(train_time/60))
 
     with torch.no_grad():
-        accuracy = net._test(testloader)
+        accuracy = test(net, testloader)
         out_args = dict(LR=args.lr, Lambda=args._lambda, Runtime=train_time/60)
         if not args.attack:
             write_output(net, accuracy, **out_args)
@@ -168,7 +168,6 @@ def main():
                                                  shuffle=True, num_workers=NUM_WORKERS)
         attack = run_attack(net, device, args.targeted, sampleloader, n_samples=args.n_samples,
                             batch=args.a_batch, n_classes=n_classes)
-                            # lr=0.01, max_iterations=5000)
 
 if __name__ == "__main__":
     main()

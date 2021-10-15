@@ -1,3 +1,5 @@
+import torch
+from torchvision.utils import save_image
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -37,6 +39,17 @@ def img_pipeline(imgs):
     npimgs = list(map(lambda x: np.round(x*255).astype(int), npimgs))
     return npimgs
 
+
+def save_images(images, path, fnames):
+    if len(images.shape) != 4:
+        images = [images]
+    for image, fname in zip(images,fnames):
+        if not os.path.isdir(path):
+            os.makedirs(path)
+        image = image + .5
+        save_image(image, path+fname+'.png')
+
+
 def show_image(idx, adv_img, img, classes, fname='', l2=None, with_perturb=False):
     def set_axis_style(ax):
         ax.xaxis.set_ticklabels([])
@@ -58,6 +71,9 @@ def show_image(idx, adv_img, img, classes, fname='', l2=None, with_perturb=False
     npimgs = img_pipeline([img, adv_img])
 
     kwargs = img.size()[0]==1 and {'cmap': 'gray'} or {}
+    kwargs['vmax'] = 255
+    kwargs['vmin'] = 0
+
     ax[0].set_title("Original: Class %s"%classes[label])
     pl1=ax[0].imshow(np.transpose(npimgs[0], (1, 2, 0)), **kwargs)
     ax[2 if with_perturb else 1].set_title("Perturbed: Class %s"%classes[target])

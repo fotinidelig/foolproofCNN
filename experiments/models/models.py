@@ -104,7 +104,8 @@ class WideResNet(BasicModel):
         self,
         i_channels = 3,
         depth = 16,
-        width = 1
+        width = 1,
+        num_classes = 10
     ):
         super(WideResNet, self).__init__()
         assert (depth-4)%6 == 0, 'depth should be 6n+4'
@@ -119,7 +120,7 @@ class WideResNet(BasicModel):
         self.group3 = WideResBlock(N, widths[1], widths[2], 3, stride=2)
         self.group4 = WideResBlock(N, widths[2], widths[3], 3, stride=2)
         self.bn1 = nn.BatchNorm2d(widths[3])
-        self.fc = BasicLinear(widths[3], 10)
+        self.fc = BasicLinear(widths[3], num_classes)
         if verbose:
             print("\n", self)
 
@@ -133,7 +134,7 @@ class WideResNet(BasicModel):
         out = self.group3(out)
         out = self.group4(out)
         out = F.relu(self.bn1(out), inplace=True)
-        out = F.avg_pool2d(out, 8)
+        out = F.avg_pool2d(out, out.shape[2])
         N, C, W, H = (*(out.shape),)
         out = out.view(-1, C*W*H)
         logits = self.fc(out)
@@ -141,9 +142,9 @@ class WideResNet(BasicModel):
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
         return logits
 
-
-def tiny_imagenet_model():
-    model = resnet18(pretrained=True)
+## Load ResNet for Tiny ImageNet
+def tiny_imagenet_model(pretrained):
+    model = resnet18(pretrained=pretrained)
     for param in model.parameters():
         param.requires_grad = False
     model.fc = nn.Linear(512, 200)
@@ -154,7 +155,7 @@ def finetune_params(model):
     params_to_update = model.parameters()
     print("Params to learn:")
     params_to_update = []
-    for name,param in model_ft.named_parameters():
+    for name,param in model.named_parameters():
         if param.requires_grad == True:
             params_to_update.append(param)
             print("\t",name)

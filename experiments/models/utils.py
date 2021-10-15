@@ -120,6 +120,7 @@ def train(
     momentum = .9,
     weight_decay = 5e-4,
     params_to_update = None,
+    model_name = None,
     **kwargs
 ):
     # turn on training mode, necessary for dropout/batch_norm layers
@@ -135,12 +136,14 @@ def train(
     criterion = nn.CrossEntropyLoss().to(device)
     batch_size = trainloader.batch_size
     loss_p_epoch = []
+    total_inputs = 0
 
     for epoch in range(epochs):
         iters = []
         losses = []
         start_time = time.time()
         for i, batch in enumerate(trainloader, 0):
+            total_inputs += batch[0].size(0)
             data = batch[0].to(device)
             targets = batch[1].to(device)
             pred = model(data.float())
@@ -149,24 +152,25 @@ def train(
             optimizer.step()
             optimizer.zero_grad()
             iters.append(i)
-            losses.append(float(loss.item()))
+            losses.append(float(loss.item())*batch_size)
 
         # if epoch%5 == 0:
+        cur_lr = optimizer.param_groups[0]["lr"]
         scheduler.step()
 
-        loss_p_epoch.append(float(loss.item()))
+        loss_p_epoch.append(sum(losses)/total_inputs)
         epoch_time = time.time()-start_time
-        cur_lr = optimizer.param_groups[0]["lr"]
         if verbose:
             print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
-                    (epoch, loss.item(), cur_lr, epoch_time/60))
+                    (epoch, loss_p_epoch[-1], cur_lr, epoch_time/60))
         # if epoch%5 == 0:
         #     learning_curve(iters, losses, epoch, cur_lr)
     if kwargs['filename']:
         learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['filename'])
     if not os.path.isdir('models'):
         os.makedirs('models')
-    torch.save(model.state_dict(), f"pretrained/{model.__class__.__name__}.pt")
+    model_name = model.__class__.__name__ if not model_name else model_name
+    torch.save(model.state_dict(), f"pretrained/{model_name}.pt")
 
 
 def test(model, testloader):
