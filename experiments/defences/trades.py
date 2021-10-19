@@ -4,6 +4,7 @@ import torch
 from torch import nn
 from experiments.models.utils import learning_curve
 from experiments.attacks.fgsm import clip
+from experiments.attacks.utils import show_image
 
 def train_trades(
         net,
@@ -74,7 +75,7 @@ def trades_loss(
 
     # start from a random point near x
     adv_x = x.clone().detach()
-    rand = torch.zeros_like(x).uniform_(-eps, eps).float()
+    rand = torch.empty(x.shape).normal_(mean=0,std=1).to(device)
     adv_x = adv_x + rand
     adv_x = torch.clamp(adv_x, x_min, x_max).to(device)
 
@@ -99,6 +100,17 @@ def trades_loss(
             adv_x = torch.clamp(x+perturb, x_min, x_max)
         else:
             raise RuntimeError(f"Invalid norm was passed:{norm}, expected 2 or np.inf norm")
+
+    ## DEBUG:
+    # i = np.random.randint(x.shape[0]) # random image
+    # o = np.random.randint(100) # do 50% of epochs
+    # classes = [str(i) for i in range(10)]
+    # _l2 = torch.norm(adv_x[i] - x[i])
+    # if o < 50:
+    #     lab_atck = net.predict(adv_x[i])[0][0]
+    #     fname = 'trades_test'
+    #     show_image(i, (adv_x[i], lab_atck), (x[i], y[i]),
+    #              classes, fname="trades_adv", l2=_l2)
 
     set_requires_grad(net, True)
     net.train()

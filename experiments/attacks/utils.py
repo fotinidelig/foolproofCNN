@@ -12,7 +12,7 @@ config.read('config.ini')
 verbose = config.getboolean('general','verbose')
 attack_fname = config.get('general','attack_fname')
 
-def write_output(total_cnt, adv_cnt, const_list, l2_list, dataset, model, lr, iterations, time):
+def write_attack_output(total_cnt, adv_cnt, const_list, l2_list, dataset, model, lr, iterations, time):
     success_rate = float(adv_cnt)/total_cnt
     cosnt_mean = sum(const_list)/adv_cnt
     l2_mean = sum(l2_list)/adv_cnt
@@ -43,6 +43,8 @@ def img_pipeline(imgs):
 def save_images(images, path, fnames):
     if len(images.shape) != 4:
         images = [images]
+    if not isinstance(fnames, list):
+        fnames = [fnames]
     for image, fname in zip(images,fnames):
         if not os.path.isdir(path):
             os.makedirs(path)

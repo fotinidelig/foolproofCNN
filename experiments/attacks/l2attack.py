@@ -6,7 +6,7 @@ from .utils import *
 import time as tm
 
 '''
-    Disclaimer
+    *Disclaimer*
     Using:
     - random initialization (in each binary step)
     - no early stopping
@@ -54,7 +54,6 @@ def l2attack(
         """
             Binary search for const in range
             [min_const_i, max_const_i].
-
             Return smallest const for which f(x) moves to 0
             or end search if const is found.
         """
@@ -193,22 +192,22 @@ def attack_all(
 
         print("\n=> Attack took %f mins"%(batch_time/60))
         print(f"Found attack for {len(indices)}/{len(best_atck)} samples.")
-        # print(f"Mean const = {sum(vals[2])/len(indices)}") ## DEBUG:
-        # print(f"Medean const = {np.median(vals[2])}")### DEBUG:
         for i in indices:
             label = net.predict(inputs[i])[0][0]
             lab_atck = net.predict(best_atck[i])[0][0]
             fname = 'targeted' if targeted else 'untargeted/' + "cwl2/" + dataname
-            show_image(i, (best_atck[i], lab_atck), (inputs[i], label),
+            unique_idx = int(i + cnt_all - len(best_atck) + lab_atck) # index of image across all batches + attack label
+            show_image(unique_idx, (best_atck[i], lab_atck), (inputs[i], label),
                          classes, fname=fname, l2=vals[1][i])
             if save_attacks:
-                save_images(best_atck[i], f'saved/{classes[lab_atck]}/', str(i))
+                save_images(best_atck[i], f'saved/target_{lab_atck}/', str(unique_idx))
+                save_images(best_atck[i], f'saved/orig_{label}/', str(unique_idx))
 
     # DEBUG:
     lr = kwargs['lr'] if 'lr' in kwargs.keys() else 0.01
     iterations = kwargs['max_iterations'] if 'max_iterations' in kwargs.keys() else 1000
     kwargs = dict(lr=lr,iterations=iterations)
 
-    write_output(cnt_all, cnt_adv, const_all, l2_all,
+    write_attack_output(cnt_all, cnt_adv, const_all, l2_all,
                 dataname, net.__class__.__name__, time=total_time, **kwargs)
     return best_atck_all

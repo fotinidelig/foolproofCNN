@@ -15,7 +15,6 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 verbose = config.getboolean('general','verbose')
 train_fname = config.get('general','train_fname')
-attack_fname = config.get('general','attack_fname')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -165,7 +164,7 @@ def train(
                     (epoch, loss_p_epoch[-1], cur_lr, epoch_time/60))
         # if epoch%5 == 0:
         #     learning_curve(iters, losses, epoch, cur_lr)
-    if kwargs['filename']:
+    if 'l_curve_name' in kwargs.keys():
         learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['filename'])
     if not os.path.isdir('models'):
         os.makedirs('models')
@@ -186,12 +185,12 @@ def test(model, testloader):
     accuracy = float(accuracy/total)
     return accuracy
 
-def write_output(model, accuracy, **kwargs):
+def write_train_output(model, model_name, accuracy, **kwargs):
     f = open(train_fname, 'a')
     outputf = dict(file=f)
     print("<==>", **outputf)
     print(datetime.now(), **outputf)
-    print(f"Model {model.__class__.__name__}", **outputf)
+    print(f"Model {model_name}", **outputf)
     for key, val in kwargs.items():
         print(f"{key}: {val}", **outputf)
     print("Test accuracy: %.2f"%(accuracy*100),"%", **outputf)
