@@ -84,7 +84,7 @@ def pgd_inf(
 
     return adv_x
 
-def attack_all(
+def pgd_attack_all(
     net,
     sampleloader,
     targeted,

@@ -9,7 +9,7 @@ import time
 from experiments.models.utils import write_output, test
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
 from experiments.defences.trades import train_trades
-from experiments.attacks.l2attack import attack_all
+from experiments.attacks.cwattack import attack_all
 # from experiments.attacks.pgd import attack_all
 from experiments.utils import load_data
 

@@ -47,6 +47,10 @@ def xLP(amps, threshold):
     W = amps.shape[2]
 
     center = (int(H/2), int(W/2))
+
+    assert center[0]-threshold > 0, f"Filter value too large: center0 {center[0]} threshold {threshold}"
+    assert center[1]-threshold > 0, f"Filter value too large: center1 {center[1]} threshold {threshold}"
+
     filtered = amps.clone()
     x = (center[0]-threshold, center[0]+threshold+1)
     y = (center[1]-threshold, center[1]+threshold+1)
@@ -59,6 +63,10 @@ def xHP(amps, threshold):
     W = amps.shape[2]
 
     center = (int(H/2), int(W/2))
+
+    assert center[0]-threshold > 0, f"Filter value too large: center0 {center[0]} threshold {threshold}"
+    assert center[1]-threshold > 0, f"Filter value too large: center1 {center[1]} threshold {threshold}"
+
     filtered = amps.clone()
     # filter out low frequencies in range threshold -1
     x = (center[0]-threshold+1, center[0]+threshold)

@@ -6,21 +6,21 @@ import numpy as np
 import time
 
 # import experiments
-from experiments.models.utils import write_train_output, train, test
+from experiments.models.utils import write_train_output, train, calc_accuracy
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
-from experiments.attacks.l2attack import attack_all
+from experiments.attacks.cwattack import cw_attack_all
+from experiments.attacks.pgd import pgd_attack_all
 from experiments.utils import load_data
 
 import torch
 from torchvision.datasets import CIFAR10, MNIST
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 
-def run_attack(net, device, targeted, sampleloader, n_samples, batch, n_classes, **kwargs):
+def run_attack(net, attack_func, targeted, sampleloader, n_samples, batch, n_classes, **kwargs):
     input_imgs = []
     input_labs = []
     dataiter = iter(sampleloader)
-
-    net = net.to(device)
+    device = next(net.parameters()).device
     i = 0
     while i < n_samples:
         data = dataiter.next()
@@ -47,27 +47,9 @@ def run_attack(net, device, targeted, sampleloader, n_samples, batch, n_classes,
         dataname = sampleloader.dataset.__class__.__name__
         classes = sampleloader.dataset.classes
 
-        attack_all(net, inputloader, targeted, classes, dataname,
+        attack_func(net, inputloader, targeted, classes, dataname,
                     **kwargs)
     return None
-
-
-def calc_accuracy(net, testloader):
-    with torch.no_grad():
-        net.eval()
-        accuracy = 0
-        total = 0
-        device = next(net.parameters()).device
-        for i, (samples, targets) in enumerate(testloader, 0):
-            total += samples.size(0)
-            samples = samples.to(device)
-            targets = targets.to(device)
-            out=net(samples)
-            labels = torch.argmax(out, dim=1)
-            accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
-
-        accuracy = float(accuracy/total)
-        return accuracy
 
 
 def main():
@@ -122,7 +104,6 @@ def main():
     parser.add_argument('--targeted', action='store_const', const=True,
                          default=False, help='run targeted attack on all classes')
     args = parser.parse_args()
-    threshold = (*[int(val) for val in args.threshold.split(',')],)
 
     ############
     ## GLOBAL ##
@@ -134,6 +115,8 @@ def main():
     ##################
     ## Load Dataset ##
     ##################
+
+    threshold = (*[int(val) for val in args.threshold.split(',')],)
 
     if args.dataset == 'cifar10':
         print("=> Loading CIFAR10 dataset")
@@ -193,7 +176,8 @@ def main():
         accuracy_filtered = calc_accuracy(net, filtered_testloader)
         out_args['filter'] = f"{args.filter}, threshold: {threshold}"
         out_args['accuracy_filtered_dataset'] = f'{accuracy_filtered*100}%'
-
+        # accuracy_train = calc_accuracy(net, trainloader)
+        # out_args['accuracy_trainset'] = f'{accuracy_train*100}%'
     if not args.attack:
         write_train_output(net, model_name, accuracy, **out_args)
 
@@ -201,14 +185,16 @@ def main():
     ## Attack ##
     ############
     if args.cpu:
-        device = 'cpu'
+        net = net.to('cpu')
     if args.attack:
         assert args.n_samples % args.a_batch == 0, "a_batch must divide n_samples"
         n_classes=len(trainset.classes)
         # n_classes=3
+        attack_func = cw_attack_all # to run cw l2 attack
+        # attack_func = pgd_attack_all # to run pgd attack
         sampleloader = DataLoader(testset, batch_size=1,
                                                  shuffle=True, num_workers=NUM_WORKERS)
-        attack = run_attack(net, device, args.targeted, sampleloader, n_samples=args.n_samples,
+        attack = run_attack(net, attack_func, args.targeted, sampleloader, n_samples=args.n_samples,
                             batch=args.a_batch, n_classes=n_classes,
                             lr=args.a_lr, max_iterations=1000, save_attacks=True)
 

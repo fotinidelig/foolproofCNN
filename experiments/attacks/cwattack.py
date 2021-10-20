@@ -30,7 +30,7 @@ def loss(const, conf, adv_sample, input, logits, targeted, target):
     return l, fx
 
 
-def l2attack(
+def cwattack(
         net,
         x, # size (N,d...)
         targeted,
@@ -154,7 +154,7 @@ def l2attack(
     return best_atck_n, best_l2_n, best_const_n, indices
 
 
-def attack_all(
+def cw_attack_all(
         net,
         sampleloader,
         targeted,
