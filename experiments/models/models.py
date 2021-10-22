@@ -29,16 +29,21 @@ class CWCIFAR10(BasicModel):
 
         Achieved accuracy ~77%
     """
-    def __init__(self, **kwargs):
+    def __init__(self, input_size=(32, 32), n_channels=10, **kwargs):
         super(CWCIFAR10, self).__init__()
         self.conv11 = BasicConv2D(3, 64, 3, stride=(1,1), **kwargs) # CIFAR sample dimensions are (3,32,32)
         self.conv12 = BasicConv2D(64, 64, 3, stride=(1,1), **kwargs)
         self.conv21 = BasicConv2D(64, 128, 3, stride=(1,1), **kwargs)
         self.conv22 = BasicConv2D(128, 128, 3, stride=(1,1), **kwargs)
         self.mp = nn.MaxPool2d(2)
-        self.fc1 = BasicLinear(128*5*5, 256)
+
+        H, W = input_size
+        h = int(((H-4)/2-4)/2)
+        w = int(((W-4)/2-4)/2)
+
+        self.fc1 = BasicLinear(128*h*w, 256)
         self.fc2 = BasicLinear(256, 256)
-        self.fc3 = BasicLinear(256, 10)
+        self.fc3 = BasicLinear(256, n_channels)
         self.dropout = nn.Dropout(p=.5)
         if verbose:
             print("\n", self)

@@ -48,12 +48,12 @@ def xLP(amps, threshold):
 
     center = (int(H/2), int(W/2))
 
-    assert center[0]-threshold > 0, f"Filter value too large: center0 {center[0]} threshold {threshold}"
-    assert center[1]-threshold > 0, f"Filter value too large: center1 {center[1]} threshold {threshold}"
+    assert center[0]-threshold >= 0, f"Filter value too large: center0 {center[0]} threshold {threshold}"
+    assert center[1]-threshold >= 0, f"Filter value too large: center1 {center[1]} threshold {threshold}"
 
     filtered = amps.clone()
-    x = (center[0]-threshold, center[0]+threshold+1)
-    y = (center[1]-threshold, center[1]+threshold+1)
+    x = (center[0]-threshold, center[0]+threshold)
+    y = (center[1]-threshold, center[1]+threshold)
     filtered[:,x[0]:x[1], y[0]:y[1]] = 0
     return amps-filtered
 
@@ -64,13 +64,13 @@ def xHP(amps, threshold):
 
     center = (int(H/2), int(W/2))
 
-    assert center[0]-threshold > 0, f"Filter value too large: center0 {center[0]} threshold {threshold}"
-    assert center[1]-threshold > 0, f"Filter value too large: center1 {center[1]} threshold {threshold}"
+    assert center[0]-threshold >= 0, f"Filter value too large: center0 {center[0]} threshold {threshold}"
+    assert center[1]-threshold >= 0, f"Filter value too large: center1 {center[1]} threshold {threshold}"
 
     filtered = amps.clone()
     # filter out low frequencies in range threshold -1
-    x = (center[0]-threshold+1, center[0]+threshold)
-    y = (center[1]-threshold+1, center[1]+threshold)
+    x = (center[0]-threshold+1, center[0]+threshold-1)
+    y = (center[1]-threshold+1, center[1]+threshold-1)
     filtered[:,x[0]:x[1], y[0]:y[1]] = 0
     return filtered
 

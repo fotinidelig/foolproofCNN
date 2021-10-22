@@ -52,7 +52,7 @@ def load_data(
     num_workers = 2,
     root = './data',
     filter = Optional[str],
-    threshold = Optional[int, tuple],
+    threshold = Union[int, tuple],
     filter_test = False
 ):
     '''
@@ -106,18 +106,17 @@ def load_data(
 
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                        shuffle=False, num_workers=num_workers, pin_memory=True)
+
     print("\n Dataset: %s \n Trainset: %d samples\n Testset: %d samples\n BATCH_SIZE: %d \n Classes: %d \n"%
           (dataclass.__name__,trainset.__len__(),testset.__len__(), batch_size, len(trainset.classes)))
 
     return trainset, trainloader, testset, testloader
 
-## TODO: Create new dataset class for tiny-imagenet-200
 def dataset_folder_loader(
     path = './data/tiny-imagenet-200/',
+    augment = False,
     batch_size = 128,
     input_size = (64, 64),
-    train = True,
-    test = True,
     val = False,
 ):
     '''
@@ -129,21 +128,27 @@ def dataset_folder_loader(
     normalize = T.Normalize(mean=[0.485, 0.456, 0.406],
                  std=[0.229, 0.224, 0.225])
 
-    transform = T.Compose([
-                T.RandomResizedCrop(input_size),
-                T.RandomHorizontalFlip(),
-                T.ToTensor(),
-                # normalize])
-                T.Normalize([0.5, 0.5, 0.5], [1, 1, 1])])
+    mean, std = [0.5, 0.5, 0.5], [1, 1, 1]
+    transform_test = T.Compose([T.ToTensor(), T.Normalize(mean, std)])
+    transform_standard = T.Compose([T.ToTensor(), T.Normalize(mean, std)])
+    transform_augment = T.Compose([
+            T.ToTensor(),
+            T.Normalize(mean, std),
+            T.Pad(4, padding_mode='reflect'),
+            T.RandomHorizontalFlip(),
+            T.RandomCrop(32),
+            T.RandomHorizontalFlip()])
 
-    train_images = ImageFolder(path+'train', transform=transform)
-    # print(train_images.classes, train_images.class_to_idx, train_images.targets[500:520]) ## DEBUG:
+    # choose augmented or standard train set
+    transform_train = transform_augment if augment else transform_standard
+
+    train_images = ImageFolder(path+'train', transform=transform_train)
     train_loader = DataLoader(train_images, batch_size=batch_size, shuffle=True)
     try:
-        test_images = ImageFolder(path+'test', transform=transform)
+        test_images = ImageFolder(path+'test', transform=transform_test)
         test_loader = DataLoader(test_images, batch_size=batch_size, shuffle=True)
     except FileNotFoundError as err:
-        print(f"Excepted error:\n{err}")
+        print(f"Excepted Error:\n{err} \nKill process if needed\n")
         return train_images, train_loader, None, None
 
     if val:

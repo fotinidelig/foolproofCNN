@@ -165,23 +165,37 @@ def train(
         # if epoch%5 == 0:
         #     learning_curve(iters, losses, epoch, cur_lr)
     if 'l_curve_name' in kwargs.keys():
-        learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['filename'])
+        learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['l_curve_name'])
     if not os.path.isdir('models'):
         os.makedirs('models')
     model_name = model.__class__.__name__ if not model_name else model_name
     torch.save(model.state_dict(), f"pretrained/{model_name}.pt")
 
 
-def test(model, testloader):
-    model.cpu()
-    accuracy = 0
-    for i, (samples, targets) in enumerate(testloader, 0):
-        samples = samples
-        targets = targets
-        labels, probs = model.predict(samples)
-        accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
+def calc_accuracy(model, testloader):
+    with torch.no_grad():
+        model.eval()
+        accuracy = 0
+        total = 0
+        device = next(model.parameters()).device
+        for i, (samples, targets) in enumerate(testloader, 0):
+            total += samples.size(0)
+            samples = samples.to(device)
+            targets = targets.to(device)
+            out=model(samples)
+            labels = torch.argmax(out, dim=1)
 
-    total = testloader.batch_size * (i+1)
+            wrong_l=[]
+            wrong_t=[]
+            for j in range(len(samples)):
+                if int(labels[j])!=int(targets[j]):
+                    wrong_l.append(labels[j].item())
+                    wrong_t.append(targets[j].item())
+            print(wrong_l)
+            print(wrong_t)
+
+            accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
+
     accuracy = float(accuracy/total)
     return accuracy
 

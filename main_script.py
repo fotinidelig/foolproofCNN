@@ -71,7 +71,7 @@ def main():
     parser.add_argument('--filter', default='high', choices=['high', 'low', 'band'],
                          help='filter dataset images in frequency space. Default "high"')
     parser.add_argument('--threshold', default=str(0), type=str,
-                        help='filter threshold. Use "," for more than one values. Default 0 (for no filtering)')
+                        help='filter threshold. Use "," for more than one values. Default 0 (no filtering)')
     parser.add_argument('--augment', action='store_const', const=True,
                           default=False, help='apply augmentation on dataset')
     # Model
@@ -189,7 +189,7 @@ def main():
     if args.attack:
         assert args.n_samples % args.a_batch == 0, "a_batch must divide n_samples"
         n_classes=len(trainset.classes)
-        # n_classes=3
+
         attack_func = cw_attack_all # to run cw l2 attack
         # attack_func = pgd_attack_all # to run pgd attack
         sampleloader = DataLoader(testset, batch_size=1,
