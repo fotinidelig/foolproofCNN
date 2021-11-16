@@ -2,8 +2,11 @@ __pycache__/
 data/
 training_plots/
 advimages/
+advimages_old/
 datasets/
+test_scripts/
 
-train.out
-attack.out
 config.ini
+*.ipynb
+*.out
+*.png
