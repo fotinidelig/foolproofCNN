@@ -1,3 +1,4 @@
+from PIL import Image
 from datetime import datetime
 import os
 import torch
@@ -11,6 +12,8 @@ import time as tm
     - random initialization (in each binary step)
     - no early stopping
     - tanh rounding with noise to avoid NaN values
+    - predict() function from BasicModelClass which uses
+      model in inference mode (model.eval())
 '''
 
 def loss(const, conf, adv_sample, input, logits, targeted, target):
@@ -111,9 +114,9 @@ def cwattack(
         optimizer = torch.optim.Adam(params, lr=lr)
         cur_fx_n = torch.full((N,), np.inf).to(device)
         for i in range(max_iterations+1):
-            adv_sample_n = TO_MUL*torch.tanh(w_n)+TO_ADD
-            _, logits_n = net.predict(adv_sample_n, logits=True)
-            loss_n, fx_n = loss(const_n, conf, adv_sample_n, x, logits_n, targeted, target)
+            adv_n = TO_MUL*torch.tanh(w_n)+TO_ADD
+            _, logits_n = net.predict(adv_n, logits=True)
+            loss_n, fx_n = loss(const_n, conf, adv_n, x, logits_n, targeted, target)
 
             loss_n.sum().backward()
             optimizer.step()
@@ -126,10 +129,10 @@ def cwattack(
                     found_atck_n[i] = True
                     if i not in indices:
                         indices.append(i)
-                    l2_i = torch.norm(adv_sample_n[i] - x[i])
+                    l2_i = torch.norm(adv_n[i] - x[i])
                     if l2_i < best_l2_n[i]:
                         best_l2_n[i]  = l2_i
-                        best_atck_n[i] = adv_sample_n[i].detach().clone()
+                        best_atck_n[i] = adv_n[i].detach().clone()
                         best_const_n[i] = const_n[i].clone()
                         best_w_n[i] = w_n[i].clone().detach()
 
@@ -178,11 +181,11 @@ def cw_attack_all(
         targets = batch[1].to(device) if targeted else None
 
         start_time = tm.time()
-        vals = l2attack(net, inputs, targeted, targets, **kwargs)
+        vals = cwattack(net, inputs, targeted, targets, **kwargs)
         batch_time = tm.time()-start_time
         total_time+=batch_time/60
 
-        best_atck = vals[0]
+        best_atck = vals[0] # (N, C, H, W)
         best_atck_all+=best_atck
         l2_all += vals[1]
         const_all += vals[2]
@@ -198,11 +201,11 @@ def cw_attack_all(
             fname = 'targeted' if targeted else 'untargeted/' + "cwl2/" + dataname
             unique_idx = int(i + cnt_all - len(best_atck) + lab_atck) # index of image across all batches + attack label
             show_image(unique_idx, (best_atck[i], lab_atck), (inputs[i], label),
-                         classes, fname=fname, l2=vals[1][i])
+                         classes, fname=fname, l2=vals[1][i], with_perturb=True)
             if save_attacks:
-                save_images(best_atck[i], f'saved/target_{lab_atck}/', str(unique_idx))
-                save_images(best_atck[i], f'saved/orig_{label}/', str(unique_idx))
-
+                save_images(best_atck[i], f'saved/target/{classes[lab_atck]}/', str(unique_idx))
+                save_images(best_atck[i], f'saved/orig/{classes[label]}/', str(unique_idx)+classes[lab_atck])
+                path = f'saved/orig/{classes[label]}/{str(unique_idx)+classes[lab_atck]}.png'
     # DEBUG:
     lr = kwargs['lr'] if 'lr' in kwargs.keys() else 0.01
     iterations = kwargs['max_iterations'] if 'max_iterations' in kwargs.keys() else 1000
@@ -210,4 +213,6 @@ def cw_attack_all(
 
     write_attack_output(cnt_all, cnt_adv, const_all, l2_all,
                 dataname, net.__class__.__name__, time=total_time, **kwargs)
+
+    best_atck_all = torch.stack(best_atck_all)
     return best_atck_all
