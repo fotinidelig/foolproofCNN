@@ -139,7 +139,7 @@ class WideResNet(BasicModel):
         out = self.group3(out)
         out = self.group4(out)
         out = F.relu(self.bn1(out), inplace=True)
-        out = F.avg_pool2d(out, out.shape[2])
+        out = F.adaptive_avg_pool2d(out, 1)
         N, C, W, H = (*(out.shape),)
         out = out.view(-1, C*W*H)
         logits = self.fc(out)
@@ -147,11 +147,13 @@ class WideResNet(BasicModel):
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
         return logits
 
-## Load ResNet for Tiny ImageNet
-def tiny_imagenet_model(pretrained):
+## Load ResNet-18 for Tiny ImageNet
+def tiny_imagenet_model(pretrained, grads=True):
     model = resnet18(pretrained=pretrained)
-    for param in model.parameters():
-        param.requires_grad = False
+    model.avgpool = nn.AdaptiveAvgPool2d(1)
+    if pretrained and not grads:
+        for param in model.parameters():
+            param.requires_grad = False
     model.fc = nn.Linear(512, 200)
     print(model)
     return model

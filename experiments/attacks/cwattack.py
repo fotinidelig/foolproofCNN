@@ -16,7 +16,15 @@ import time as tm
       model in inference mode (model.eval())
 '''
 
-def loss(const, conf, adv_sample, input, logits, targeted, target):
+def loss(
+        const,
+        conf,
+        adv_sample,
+        input,
+        logits,
+        targeted,
+        target
+    ):
     """
     Calculating the loss with f_6 objective function,
     refer to the paper for details
@@ -186,7 +194,7 @@ def cw_attack_all(
         total_time+=batch_time/60
 
         best_atck = vals[0] # (N, C, H, W)
-        best_atck_all+=best_atck
+        best_atck_all+=best_atck # splits (N, C, H, W) tensor to N x (C, H, W) tensors
         l2_all += vals[1]
         const_all += vals[2]
         indices = vals[3]
@@ -214,5 +222,5 @@ def cw_attack_all(
     write_attack_output(cnt_all, cnt_adv, const_all, l2_all,
                 dataname, net.__class__.__name__, time=total_time, **kwargs)
 
-    best_atck_all = torch.stack(best_atck_all)
+    best_atck_all = torch.stack(best_atck_all, dim=0).detach()
     return best_atck_all

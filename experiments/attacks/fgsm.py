@@ -18,7 +18,13 @@ def clip(x, eps, norm, pgd_proj=False):
     '''
     assert len(x.size()) == 4, "Function accepts elements in batches"
 
-    red_dims = tuple(range(1, len(x))) # red_dims = (1,2,3)
+    use_gpu = lambda x=True: torch.set_default_tensor_type(torch.cuda.FloatTensor
+                                             if torch.cuda.is_available() and x
+                                             else torch.FloatTensor)
+    use_gpu()
+
+    device = x.device
+    dims = tuple(range(1, len(x.shape))) # dims = (1,2,3)
     min_ = torch.tensor([1.0]*x.size(0))
     zero_thres = torch.tensor([1e-12]*x.size(0)) # zero_thres.shape = N
 
@@ -28,15 +34,15 @@ def clip(x, eps, norm, pgd_proj=False):
         else:
             clipped = eps*torch.sign(x)
     elif norm == 1:
-        one_norm = torch.maximum(torch.sum(x, dim=red_dims), zero_thres)
+        one_norm = torch.maximum(torch.sum(x, dim=dims), zero_thres)
         clipped = N_mul(x, eps/one_norm) if not pgd_proj else N_mul(x, torch.min(min_, eps/one_norm))
     elif norm == 2:
-        sq_norm = torch.maximum(torch.norm(x, dim=red_dims), zero_thres)
+        sq_norm = torch.maximum(torch.norm(x, dim=dims[1:]).norm(dim=dims[0]), zero_thres)
         clipped = N_mul(x, eps/sq_norm) if not pgd_proj else N_mul(x, torch.min(min_, eps/sq_norm))
     return clipped
 
 def fgsm(
-    net,
+    model,
     x,
     eps,
     norm,
@@ -48,14 +54,15 @@ def fgsm(
     assert norm in [np.inf, 1, 2], "To run FGSM attack, norm must be np.inf, 1, or 2."
     assert len(x.size()) == 4, "Function accepts elements in batches"
 
-    net.eval()
+    model.eval()
 
     if not targeted:
-        target = torch.argmax(net.forward(x))
+        logits = model.forward(x)
+        target = torch.argmax(logits, dim=len(logits.shape)-1)
 
     x = x.clone().detach().requires_grad_(True).float()
     criterion = nn.CrossEntropyLoss()
-    x_pred = net.forward(x)
+    x_pred = model.forward(x)
     loss = criterion(x_pred, target)
     if targeted:
         loss = -loss

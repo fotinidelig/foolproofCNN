@@ -7,9 +7,9 @@ import torch
 import torchvision
 import torch.nn.functional as F
 from torch import nn
+# from torchviz import make_dot
 
 ## READ CONFIGURATION PARAMETERS
-# from config import config_params
 import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -42,6 +42,26 @@ class BasicLinear(nn.Module):
         out = self.relu(out)
         return out
 
+class BasicModel(nn.Module):
+    def __init__(self):
+        super(BasicModel, self).__init__()
+
+    def forward(self, x):
+        raise NotImplementedError
+
+    def predict(self, samples, logits = False):
+        self.eval()
+        # check if x batch of samples or sample
+        if len(samples.size()) < 4:
+            samples = torch.reshape(samples, (1, *samples.size()))
+
+        logs = self.forward(samples.float())
+        if logits:
+            return torch.argmax(logs, 1), logs
+        probs = torch.nn.Softmax(dim=1)(logs)
+        return torch.argmax(probs, 1), probs
+
+
 class BasicResBlock(nn.Module):
     ## BN -> RELU -> CONV (x2)
     def __init__(self, i_channels, o_channels, kernel_size, stride = 1):
@@ -55,9 +75,11 @@ class BasicResBlock(nn.Module):
         bn2 = nn.BatchNorm2d(o_channels)
         relu2 = nn.ReLU(inplace=True)
         conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, padding=1, stride=1)
-        self.seqRes = nn.Sequential(bn1, relu1, conv1, bn2, relu2, conv2)
+        self.convLayers = nn.Sequential(bn1, relu1, conv1, bn2, relu2, conv2)
+
         self.id_conv = nn.Conv2d(i_channels, o_channels, 1, stride=stride)
         self.id_bn = nn.BatchNorm2d(i_channels)
+        self.resLayers = nn.Sequential(self.id_bn, nn.ReLU(inplace=True), self.id_conv)
         # Initialization as found in vision::torchvision::models::resnet.py
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -69,8 +91,8 @@ class BasicResBlock(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x):
-        out = self.seqRes(x)
-        out += x if self.sameInOut else self.id_conv(F.relu(self.id_bn(x)))
+        out = self.convLayers(x)
+        out += x if self.sameInOut else self.resLayers(x)
         return out
 
 class WideResBlock(nn.Module):
@@ -86,28 +108,6 @@ class WideResBlock(nn.Module):
     def forward(self, x):
         out = self.blocks(x)
         return out
-
-
-class BasicModel(nn.Module):
-    def __init__(self):
-        super(BasicModel, self).__init__()
-
-    def forward(self, x):
-        raise NotImplementedError
-
-
-    def predict(self, samples, logits = False):
-        # check if x batch of samples or sample
-        if len(samples.size()) < 4:
-            samples = torch.reshape(samples, (1, *samples.size()))
-
-        self.eval()
-        logs = self.forward(samples.float())
-        if logits:
-            return torch.argmax(logs, 1), logs
-        softmax = torch.nn.Softmax(dim=1)
-        probs = softmax(logs)
-        return torch.argmax(probs, 1), probs
 
 
 def train(
@@ -131,7 +131,6 @@ def train(
     optimizer = torch.optim.SGD(params_to_update, lr = lr, momentum = momentum,
                                  nesterov = True, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WideResNet
     criterion = nn.CrossEntropyLoss().to(device)
     batch_size = trainloader.batch_size
     loss_p_epoch = []
@@ -152,7 +151,6 @@ def train(
             optimizer.zero_grad()
             iters.append(i)
             losses.append(float(loss.item())*batch_size)
-
         # if epoch%5 == 0:
         cur_lr = optimizer.param_groups[0]["lr"]
         scheduler.step()
@@ -162,8 +160,6 @@ def train(
         if verbose:
             print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
                     (epoch, loss_p_epoch[-1], cur_lr, epoch_time/60))
-        # if epoch%5 == 0:
-        #     learning_curve(iters, losses, epoch, cur_lr)
     if 'l_curve_name' in kwargs.keys():
         learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['l_curve_name'])
     if not os.path.isdir('models'):
@@ -184,15 +180,6 @@ def calc_accuracy(model, testloader):
             targets = targets.to(device)
             out=model(samples)
             labels = torch.argmax(out, dim=1)
-
-            wrong_l=[]
-            wrong_t=[]
-            for j in range(len(samples)):
-                if int(labels[j])!=int(targets[j]):
-                    wrong_l.append(labels[j].item())
-                    wrong_t.append(targets[j].item())
-            print(wrong_l)
-            print(wrong_t)
 
             accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
 
@@ -217,7 +204,7 @@ def learning_curve(iters, losses, epoch, lr, batch_size, filename):
     plt.xlabel("Iterations")
     plt.ylabel("Loss")
     plt.plot(iters, losses)
-    plt.savefig(f"training_plots/learning_curve_{filename}.png")
+    plt.savefig(f"training_plots/{filename}.png")
 
 ## Debug-friendly-functions
 def print_named_weights_sum(model, p_name = None):
