@@ -42,7 +42,7 @@ def loss(
 
 
 def cwattack(
-        net,
+        model,
         x, # size (N,d...)
         targeted,
         target=None, # size (N,C)
@@ -99,7 +99,7 @@ def cwattack(
     TO_ADD = .5*(x_max + x_min)
 
     if not targeted:
-        target, _ = net.predict(x)
+        target, _ = model.predict(x)
 
     max_const_n = torch.tensor([max_const]*N).to(device).float()
     min_const_n = torch.tensor([min_const]*N).to(device).float()
@@ -123,7 +123,7 @@ def cwattack(
         cur_fx_n = torch.full((N,), np.inf).to(device)
         for i in range(max_iterations+1):
             adv_n = TO_MUL*torch.tanh(w_n)+TO_ADD
-            _, logits_n = net.predict(adv_n, logits=True)
+            _, logits_n = model.predict(adv_n, logits=True)
             loss_n, fx_n = loss(const_n, conf, adv_n, x, logits_n, targeted, target)
 
             loss_n.sum().backward()
@@ -161,12 +161,12 @@ def cwattack(
                 w_n[i] = inv_input[i]+eps[i]
         w_n = w_n.requires_grad_(True)
 
-    best_l2_n = torch.norm(best_atck_n - x, dim=list(range(len(x.shape))[2:])).norm(dim=1).tolist()
+    best_l2_n = torch.norm((best_atck_n-x).view(-1, 1), dim=1).tolist()
     return best_atck_n, best_l2_n, best_const_n, indices
 
 
 def cw_attack_all(
-        net,
+        model,
         sampleloader,
         targeted,
         classes,
@@ -182,45 +182,49 @@ def cw_attack_all(
     cnt_all = 0
     total_time = 0
 
-    device = next(net.parameters()).device
-
+    device = next(model.parameters()).device
+    folder = 'advimages'+'targeted' if targeted else 'untargeted/' + "cw/"
+    show_image = show_image_function(classes, folder)
     for bidx, batch in enumerate(sampleloader):
         inputs = batch[0].to(device)
         targets = batch[1].to(device) if targeted else None
 
         start_time = tm.time()
-        vals = cwattack(net, inputs, targeted, targets, **kwargs)
+        vals = cwattack(model, inputs, targeted, targets, **kwargs)
         batch_time = tm.time()-start_time
         total_time+=batch_time/60
 
-        best_atck = vals[0] # (N, C, H, W)
-        best_atck_all+=best_atck # splits (N, C, H, W) tensor to N x (C, H, W) tensors
+        output = vals[0] # (N, C, H, W)
+        best_atck += output # (N, C, H, W) tensor == N x (C, H, W) list
         l2_all += vals[1]
-        const_all += vals[2]
         indices = vals[3]
         cnt_adv += len(indices)
-        cnt_all += len(best_atck)
+        cnt_all += len(output)
 
         print("\n=> Attack took %f mins"%(batch_time/60))
-        print(f"Found attack for {len(indices)}/{len(best_atck)} samples.")
+        print(f"Found attack for {len(indices)}/{len(output)} samples.")
         for i in indices:
-            label = net.predict(inputs[i])[0][0]
-            lab_atck = net.predict(best_atck[i])[0][0]
+            label = model.predict(inputs[i])[0][0]
+            target = model.predict(output[i])[0][0]
             fname = 'targeted' if targeted else 'untargeted/' + "cwl2/" + dataname
-            unique_idx = int(i + cnt_all - len(best_atck) + lab_atck) # index of image across all batches + attack label
-            show_image(unique_idx, (best_atck[i], lab_atck), (inputs[i], label),
-                         classes, fname=fname, l2=vals[1][i], with_perturb=True)
+            unique_idx = int(i + cnt_all - len(output) + target) # index of image across all batches + attack label
+            show_image(unique_idx, (output[i], target), (inputs[i], label),
+                    l2=vals[1][i], with_perturb=True)
+            const_all += [vals[2][i]]
             if save_attacks:
-                save_images(best_atck[i], f'saved/target/{classes[lab_atck]}/', str(unique_idx))
-                save_images(best_atck[i], f'saved/orig/{classes[label]}/', str(unique_idx)+classes[lab_atck])
-                path = f'saved/orig/{classes[label]}/{str(unique_idx)+classes[lab_atck]}.png'
-    # DEBUG:
+                save_images(output[i], f'saved/target/{classes[target]}/', str(unique_idx))
+                save_images(output[i], f'saved/orig/{classes[label]}/', str(unique_idx)+classes[target])
+                path = f'saved/orig/{classes[label]}/{str(unique_idx)+classes[target]}.png'
+
+    # Logs
     lr = kwargs['lr'] if 'lr' in kwargs.keys() else 0.01
     iterations = kwargs['max_iterations'] if 'max_iterations' in kwargs.keys() else 1000
-    kwargs = dict(lr=lr,iterations=iterations)
+    mean_const = sum(const_all)/cnt_adv
+    mean_distance = sum(l2_all)/cnt_adv
+    kwargs = dict(lr=lr, iterations=iterations,
+        mean_const=mean_const,mean_distance=mean_distance)
+    write_attack_log(cnt_all, cnt_adv, dataname,
+        model.__class__.__name__, time=total_time, **kwargs)
 
-    write_attack_output(cnt_all, cnt_adv, const_all, l2_all,
-                dataname, net.__class__.__name__, time=total_time, **kwargs)
-
-    best_atck_all = torch.stack(best_atck_all, dim=0).detach()
-    return best_atck_all
+    best_atck = torch.stack(best_atck, dim=0).detach()
+    return best_atck

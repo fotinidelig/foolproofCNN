@@ -4,6 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
+from experiments.fourier.analysis import toDFT, visDFT
 
 ## READ CONFIGURATION PARAMETERS
 import configparser
@@ -12,29 +13,28 @@ config.read('config.ini')
 verbose = config.getboolean('general','verbose')
 attack_fname = config.get('general','attack_fname')
 
-def write_attack_output(total_cnt, adv_cnt, const_list, l2_list, dataset, model, lr, iterations, time):
+def write_attack_log(total_cnt, adv_cnt, dataset, model, time, **kwargs):
     success_rate = float(adv_cnt)/total_cnt
-    cosnt_mean = sum(const_list)/adv_cnt
-    l2_mean = sum(l2_list)/adv_cnt
 
     f = open(attack_fname, 'a')
-    kwargs = dict(file=f)
+    outputf = dict(file=f)
 
-    print("*********", **kwargs)
-    print(datetime.now(), **kwargs)
-    print("=> Stats:", **kwargs)
-    print(f"Total time: {time}", **kwargs)
-    print(f"Dataset: {dataset}", **kwargs)
-    print(f"Model: {model}", **kwargs)
-    print(f"lr: {lr} iterations: {iterations}", **kwargs)
-    print(f"Success Rate: {(success_rate*100):.2f}% || {adv_cnt}/{total_cnt}", **kwargs)
-    print(f"Mean const: {cosnt_mean:.3f}", **kwargs)
-    print(f"Mean l2: {l2_mean:.2f}", **kwargs)
+    print("*********", **outputf)
+    print(datetime.now(), **outputf)
+    print("=> Stats:", **outputf)
+    print(f"Total time: {time}", **outputf)
+    print(f"Dataset: {dataset}", **outputf)
+    print(f"Model: {model}", **outputf)
+    print(f"Success Rate: {(success_rate*100):.2f}% || {adv_cnt}/{total_cnt}", **outputf)
+    for key, val in kwargs.items():
+        print(f"{key}: {val}", **outputf)
 
+def ToValidImg(x):
+    return (x-x.min())/(x.max()-x.min())
 
 def img_pipeline(imgs):
     images = list(map(lambda x: x.cpu().detach(), imgs))
-    npimgs = list(map(lambda x: x + .5, images)) # un-normalize
+    npimgs = list(map(lambda x: ToValidImg(x), images)) # un-normalize
     npimgs = list(map(lambda x: x.numpy(), npimgs))
     npimgs = list(map(lambda x: np.round(x*255).astype(int), npimgs))
     return npimgs
@@ -48,49 +48,52 @@ def save_images(images, path, fnames):
     for image, fname in zip(images,fnames):
         if not os.path.isdir(path):
             os.makedirs(path)
-        image = image + .5
+        image = ToValidImg(image)
         save_image(image, path+fname+'.png')
 
+def show_image_function(classes, folder):
+    def show_image(idx, adv_img, img, l2=None, with_perturb=False):
+        def set_axis_style(ax):
+            ax.xaxis.set_visible(False)
+            ax.yaxis.set_visible(False)
 
-def show_image(idx, adv_img, img, classes, fname='', l2=None, with_perturb=False):
-    def set_axis_style(ax):
-        ax.xaxis.set_ticklabels([])
-        ax.yaxis.set_ticklabels([])
+        plt.clf()
+        plt.rc('font', family='serif')
+        ncols = 3 if with_perturb else 2
+        fig, ax = plt.subplots(nrows=1,ncols=ncols, dpi=300)
 
-    plt.clf()
-    plt.rcParams["font.family"] = "serif"
-    ncols = 3 if with_perturb else 2
-    fig, ax = plt.subplots(nrows=1,ncols=ncols, dpi=300, figsize=(7, 5))
+        set_axis_style(ax[0])
+        set_axis_style(ax[2 if with_perturb else 1])
 
-    set_axis_style(ax[0])
-    set_axis_style(ax[1])
+        if l2:
+            fig.suptitle(f'L2 distance: {l2:.5f}', fontsize=16)
 
-    if l2:
-        fig.suptitle(f'L2 distance: {l2:.3f}', fontsize=16)
+        adv_img, target = adv_img
+        img, label = img
+        npimgs = img_pipeline([img, adv_img])
 
-    adv_img, target = adv_img
-    img, label = img
-    npimgs = img_pipeline([img, adv_img])
+        kwargs = img.size()[0]==1 and {'cmap': 'gray'} or {}
+        kwargs['vmax'] = 255
+        kwargs['vmin'] = 0
 
-    kwargs = img.size()[0]==1 and {'cmap': 'gray'} or {}
-    kwargs['vmax'] = 255
-    kwargs['vmin'] = 0
+        ax[0].set_title("Class: %s"%classes[label])
+        ax[0].imshow(np.transpose(npimgs[0], (1, 2, 0)), **kwargs)
+        ax[2 if with_perturb else 1].set_title("Class: %s"%classes[target])
+        ax[2 if with_perturb else 1].imshow(np.transpose(npimgs[1], (1, 2, 0)), **kwargs)
 
-    ax[0].set_title("Original: Class %s"%classes[label])
-    pl1=ax[0].imshow(np.transpose(npimgs[0], (1, 2, 0)), **kwargs)
-    ax[2 if with_perturb else 1].set_title("Perturbed: Class %s"%classes[target])
-    pl2=ax[2 if with_perturb else 1].imshow(np.transpose(npimgs[1], (1, 2, 0)), **kwargs)
+        if with_perturb:
+            set_axis_style(ax[1])
+            perturb = npimgs[1] - npimgs[0]
+            perturb = ToValidImg(perturb)
+            ax[1].set_title("Perturbation")
+            ax[1].imshow(np.transpose(perturb, (1, 2, 0)), **kwargs)
 
-    if with_perturb:
-        perturb = npimgs[1] - npimg[0]
-        ax[1].set_title("Perturbation")
-        pl2=ax[1].imshow(np.transpose(perturb, (1, 2, 0)), **kwargs)
 
-    path = f"advimages/{fname}/H{datetime.now().hour}/"
-    if not os.path.isdir(path):
-        os.makedirs(path)
-    plt.savefig(f"{path}sample_{idx}_{classes[target]}.png")
-
+        if not os.path.isdir(folder):
+            os.makedirs(folder)
+        plt.show()
+        fig.savefig(f"{folder}sample_{idx}_{classes[target]}.png")
+    return show_image
 
 def plot_l2(l2_list, iterations):
     mean_l2 = [np.mean(l2_list)]*len(l2_list)
@@ -141,3 +144,37 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
     if not os.path.isdir(path):
         os.makedirs(path)
     plt.savefig(f"{path}/{fname}.png")
+
+
+def frequency_l1_diff(x_ben, x_adv, **kwargs):
+    device = x_adv.device
+    if len(x_ben.shape) == 3:
+        x_ben = torch.view(1,*x_ben.shape()).to(device)
+        x_adv = torch.view(1,*x_adv.shape())
+
+    x_ben = x_ben.to(device)
+    N, C, H, W = x_ben.shape
+    _, f_ben_amps, f_ben_phase = toDFT(x_ben)
+    _, f_adv_amps, f_adv_phase = toDFT(x_adv)
+
+    diff_per_img = torch.sum(abs(f_ben_amps-f_adv_amps), dim=(1,2,3))
+    percentage_per_frequency = torch.zeros((N, H, W)).to(device)
+    for i in range(N):
+        percentage_per_frequency[i] = torch.sum(abs((f_ben_amps[i]-f_adv_amps[i])), dim=(0,))
+        percentage_per_frequency[i] /= diff_per_img[i]
+        percentage_per_frequency[i] *= 100
+    diff_per_freq = torch.median(percentage_per_frequency, dim=0)[0]
+
+    fig, ax = plt.subplots(1,1)
+    # plot = ax.imshow(ToValidImg(20*np.log10(diff_per_freq.to('cpu'))), cmap='magma')
+    plot = ax.imshow(ToValidImg(diff_per_freq.to('cpu')), cmap='magma')
+    ax.set_title("Amplitude Distortion %")
+
+    ax.xaxis.set_ticks(range(1, W+1, 5))
+    ax.xaxis.set_ticklabels(list(range(-((W-1)//2), W//2, 5)))
+    ax.yaxis.set_ticks(range(1, H+1, 5))
+    ax.yaxis.set_ticklabels(list(range(-((H-1)//2), H//2, 5)))
+
+    fig.colorbar(plot,ax=ax)
+    plt.show()
+    fig.savefig("frequency_l1_diff.png")
