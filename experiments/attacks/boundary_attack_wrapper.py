@@ -14,7 +14,7 @@ from foolbox.models.pytorch import PyTorchModel
 from .utils import *
 import time
 
-def boundary_attack(
+def boundary_attack_all(
     model,
     sampleloader,
     dataset,

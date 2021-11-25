@@ -7,11 +7,12 @@ import time
 from experiments.models.utils import train, calc_accuracy
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
 from experiments.attacks.cwattack import cw_attack_all
+from experiments.attacks.boundary_attack_wrapper import boundary_attack_all
 from experiments.attacks.pgd import pgd_attack_all,pgd_attack_all_inf
 from experiments.attacks.utils import frequency_l1_diff
 from experiments.utils import load_data, x_max_min
 
-## DEBUG:
+## DEBUG
 from cleverhans.torch.attacks.carlini_wagner_l2 import carlini_wagner_l2
 from cleverhans.torch.attacks.projected_gradient_descent import projected_gradient_descent
 
@@ -26,13 +27,13 @@ config.read('config.ini')
 low_fname = config.get('general','rob_accuracy_low')
 high_fname = config.get('general','rob_accuracy_high')
 
-def run_attack(net, attack_func, targeted, sampleloader, samples, batch, n_classes, **kwargs):
+def run_attack(model, attack_func, targeted, sampleloader, samples, batch, n_classes, **kwargs):
     input_imgs = []
     input_labs = []
     dataiter = iter(sampleloader)
-    device = next(net.parameters()).device
+    device = next(model.parameters()).device
 
-    net.eval()
+    model.eval()
 
     i = 0
     while i < samples:
@@ -40,7 +41,7 @@ def run_attack(net, attack_func, targeted, sampleloader, samples, batch, n_class
         img = torch.reshape(data[0],data[0].size()[1:])
         label = int(data[1][0])
 
-        if net.predict(img.to(device))[0][0] == label:
+        if model.predict(img.to(device))[0][0] == label:
             i+=1
             input_imgs.append(img)
             input_labs.append(label)
@@ -53,31 +54,13 @@ def run_attack(net, attack_func, targeted, sampleloader, samples, batch, n_class
 
         inputset = TensorDataset(torch.stack(input_imgs),
                                 torch.tensor([target for i in range(len(input_imgs))]))
-        inputloader = DataLoader(inputset, batch_size=batch,
-                                shuffle=False, num_workers=2)
+        inputloader = DataLoader(inputset, batch_size=batch, shuffle=False)
 
-        dataname = sampleloader.dataset.__class__.__name__
+        dataset = sampleloader.dataset.__class__.__name__
         classes = sampleloader.dataset.classes
+        advimgs = attack_func(model, inputloader, dataset, targeted, classes,**kwargs)
 
-        advimgs = attack_func(net, inputloader, targeted, classes, dataname,
-                    **kwargs)
-        advimg_clever=pgd_attack_all_inf(net, inputloader, targeted, classes, dataname,
-                    **kwargs)
-        # advimg_clever = projected_gradient_descent(net.forward,
-        #                 torch.stack(input_imgs), kwargs['eps'], kwargs['alpha'], kwargs['n_iters'], kwargs['norm'],
-        #                 clip_min=-.5, clip_max=.5, y=None, targeted=False)
-        for n, (i1, i2) in enumerate(zip(advimgs,advimg_clever)):
-            success1=(net.predict(i1)[0][0] != input_labs[n])
-            success2=(net.predict(i2)[0][0] != input_labs[n])
-            print("Ours:",success1)
-            print("Clevers:",success2)
-            if success1:
-                cnt1+=1
-            if success2:
-                cnt2+=1
-        print(cnt1,cnt2)
-
-        frequency_l1_diff(torch.stack(input_imgs), advimg_clever.detach())
+        frequency_l1_diff(torch.stack(input_imgs), advimgs.detach())
     return None
 
 
@@ -87,9 +70,7 @@ def main():
     ############
 
     parser = argparse.ArgumentParser(description='''
-                                            With this script you can train any custom model from the ./experiments/model directory
-                                            on CIFAR10 or MNIST datasets,
-                                            or run an attack from the ./experiments/attacks directory.
+                                            Run an attack from the ./experiments/attacks directory.
                                             All imported modules can be found in the ./experiments/ directory.
                                             ''')
 
@@ -108,7 +89,7 @@ def main():
     # Attack
     parser.add_argument('--cpu', action='store_const', const=True,
                          default=False, help='run attack on cpu, not cuda')
-    parser.add_argument('--attack', default='cw', type=str, choices=['cw', 'pgd'],
+    parser.add_argument('--attack', default='cw', type=str, choices=['cw', 'pgd', 'boundary'],
                           help='attack method. Default C&W attack (cw).')
     parser.add_argument('--samples', default=100, type=int,
                          help='number of samples to attack')
@@ -135,12 +116,12 @@ def main():
 
     if args.dataset == 'cifar10':
         print("=> Loading CIFAR10 dataset")
-        trainset, trainloader, testset, testloader = load_data(CIFAR10, batch_size=BATCH_SIZE, augment=args.augment,
-                                                                filter=args.filter, threshold=threshold)
+        trainset, trainloader, testset, testloader = load_data(CIFAR10, batch_size=BATCH_SIZE, augment=False,
+                                                            filter=args.filter, threshold=threshold)
     if args.dataset == 'mnist' or args.model =='cwmnist':
         print("=> Loading MNIST dataset")
-        trainset, trainloader, testset, testloader = load_data(MNIST, batch_size=BATCH_SIZE, augment=args.augment,
-                                                                filter=args.filter, threshold=threshold)
+        trainset, trainloader, testset, testloader = load_data(MNIST, batch_size=BATCH_SIZE, augment=False,
+                                                            filter=args.filter, threshold=threshold)
 
     ###########
     ## Train ##
@@ -148,31 +129,31 @@ def main():
 
     ## Remember to use GPU for training and move dataset & model to GPU memory
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    if if not args.cpu and device == 'cuda':
+    if not args.cpu and device == 'cuda':
         torch.cuda.empty_cache()
         print("=> Using device: %s"%device)
     else:
         print("=> Using device: CPU")
 
     if args.model == "cwcifar10":
-        net = CWCIFAR10()
+        model = CWCIFAR10()
     if args.model == "cwmnist":
-        net = CWMNIST()
+        model = CWMNIST()
     if args.model == "wideresnet":
-        net = WideResNet(i_channels=3, depth=args.depth, width=args.width)
+        model = WideResNet(i_channels=3, depth=args.depth, width=args.width)
 
     if args.model_name:
         model_name = args.model_name
     else:
-        model_name = net.__class__.__name__
+        model_name = model.__class__.__name__
     print(f"Model Name: {model_name}")
 
-    net = net.to(device)
+    model = model.to(device)
     train_time = 0
     print("\n=> Using pretrained model.")
-    net.load_state_dict(torch.load(f"pretrained/{model_name}.pt", map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load(f"pretrained/{model_name}.pt", map_location=torch.device('cpu')))
 
-    acuracy = calc_accuracy(net, testloader)
+    acuracy = calc_accuracy(model, testloader)
     print(f"Model accuracy = {acuracy*100}% (on natural data)")
 
     ############
@@ -188,9 +169,12 @@ def main():
     elif args.attack == 'pgd':
         attack_func = pgd_attack_all # to run pgd attack
         atck_args = dict(eps=0.03, alpha=0.007, n_iters=60,x_min=-.5,x_max=.5,norm=np.inf)
-    sampleloader = DataLoader(testset, batch_size=1,
-                            shuffle=True, num_workers=NUM_WORKERS)
-    attack = run_attack(net, attack_func, args.targeted, sampleloader, samples=args.samples,
+    elif args.attack == 'boundary':
+        attack_func = boundary_attack_all
+        atck_args = dict(steps=1000)
+
+    sampleloader = DataLoader(testset, batch_size=1, shuffle=True, num_workers=NUM_WORKERS)
+    attack = run_attack(model, attack_func, args.targeted, sampleloader, samples=args.samples,
                             batch=args.batch, n_classes=n_classes, **atck_args)
 
 if __name__ == "__main__":
