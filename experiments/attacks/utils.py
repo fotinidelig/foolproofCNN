@@ -13,6 +13,11 @@ config.read('config.ini')
 verbose = config.getboolean('general','verbose')
 attack_fname = config.get('general','attack_fname')
 
+
+use_gpu = lambda x=True: torch.set_default_tensor_type(torch.cuda.FloatTensor
+                                         if torch.cuda.is_available() and x
+                                         else torch.FloatTensor)
+
 def write_attack_log(total_cnt, adv_cnt, dataset, model, time, **kwargs):
     success_rate = float(adv_cnt)/total_cnt
 
@@ -57,10 +62,10 @@ def show_image_function(classes, folder):
             ax.xaxis.set_visible(False)
             ax.yaxis.set_visible(False)
 
-        plt.clf()
-        plt.rc('font', family='serif')
+
         ncols = 3 if with_perturb else 2
         fig, ax = plt.subplots(nrows=1,ncols=ncols, dpi=300)
+        plt.rc('font', family='serif')
 
         set_axis_style(ax[0])
         set_axis_style(ax[2 if with_perturb else 1])
@@ -88,17 +93,15 @@ def show_image_function(classes, folder):
             ax[1].set_title("Perturbation")
             ax[1].imshow(np.transpose(perturb, (1, 2, 0)), **kwargs)
 
-
         if not os.path.isdir(folder):
             os.makedirs(folder)
+        plt.savefig(f"{folder}sample_{idx}_{classes[target]}.png")
         plt.show()
-        fig.savefig(f"{folder}sample_{idx}_{classes[target]}.png")
     return show_image
 
 def plot_l2(l2_list, iterations):
     mean_l2 = [np.mean(l2_list)]*len(l2_list)
     x = np.arange(len(l2_list))
-    plt.clf()
     plt.title("L2 distance from input")
     plt.xlabel("Sample")
     plt.ylabel("L2 distance")
@@ -119,11 +122,11 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
         ax.yaxis.set_label_position('left')
         ax.yaxis.set_ticklabels([])
 
-    plt.clf()
-    plt.rcParams["font.family"] = "serif"
     N = len(adv_imgs)
     M = len(adv_imgs[0])
     fig, ax = plt.subplots(nrows=N,ncols=M, figsize=(M,N), dpi=300)
+
+    plt.rcParams["font.family"] = "serif"
 
     xy_style = [set_axis_style(ax[i][j]) for i in range(N) for j in range(M)]
     row_0_style = [ax[0][c].set_xlabel(classes[c]) for c in range(M)]
@@ -176,5 +179,5 @@ def frequency_l1_diff(x_ben, x_adv, **kwargs):
     ax.yaxis.set_ticklabels(list(range(-((H-1)//2), H//2, 5)))
 
     fig.colorbar(plot,ax=ax)
+    plt.savefig("frequency_l1_diff.png")
     plt.show()
-    fig.savefig("frequency_l1_diff.png")

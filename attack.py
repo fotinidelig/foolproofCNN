@@ -8,7 +8,7 @@ from experiments.models.utils import train, calc_accuracy
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST
 from experiments.attacks.cwattack import cw_attack_all
 from experiments.attacks.boundary_attack_wrapper import boundary_attack_all
-from experiments.attacks.pgd import pgd_attack_all,pgd_attack_all_inf
+from experiments.attacks.pgd import pgd_attack_all
 from experiments.attacks.utils import frequency_l1_diff
 from experiments.utils import load_data, x_max_min
 
@@ -58,7 +58,7 @@ def run_attack(model, attack_func, targeted, sampleloader, samples, batch, n_cla
 
         dataset = sampleloader.dataset.__class__.__name__
         classes = sampleloader.dataset.classes
-        advimgs = attack_func(model, inputloader, dataset, targeted, classes,**kwargs)
+        advimgs = attack_func(model, inputloader, targeted, dataset, classes,**kwargs)
 
         frequency_l1_diff(torch.stack(input_imgs), advimgs.detach())
     return None
@@ -75,30 +75,40 @@ def main():
                                             ''')
 
     parser.add_argument('--dataset', default='cifar10', choices=['cifar10', 'mnist'],
-                         help='define dataset to train on or attack with')
+                     help='define dataset to train on or attack with')
     # Filter
     parser.add_argument('--filter', default='high', choices=['high', 'low', 'band'],
-                         help='filter dataset images in frequency space. Default "high"')
+                     help='filter dataset images in frequency space. Default "high"')
     parser.add_argument('--threshold', default=str(0), type=str,
-                         help='filter threshold. Use "," in case of two values. Default 0 (no filtering)')
+                     help='filter threshold. Use "," in case of two values. Default 0 (no filtering)')
     # Model
     parser.add_argument('--model', default='cwcifar10', choices=['cwcifar10', 'cwmnist', 'wideresnet'],
-                         help='model architecture. Default cwcifar10')
+                     help='model architecture. Default cwcifar10')
     parser.add_argument('--model_name', default=None, type=str,
-                         help='name of saved model (if different from model). Default None')
+                     help='name of saved model (if different from model). Default None')
     # Attack
     parser.add_argument('--cpu', action='store_const', const=True,
-                         default=False, help='run attack on cpu, not cuda')
+                     default=False, help='run attack on cpu, not cuda')
     parser.add_argument('--attack', default='cw', type=str, choices=['cw', 'pgd', 'boundary'],
-                          help='attack method. Default C&W attack (cw).')
+                      help='attack method. Default C&W attack (cw).')
     parser.add_argument('--samples', default=100, type=int,
-                         help='number of samples to attack')
-    parser.add_argument('--lr', default=0.01, type=float,
-                         help="learning rate for attack optimization" )
+                     help='number of samples to attack')
     parser.add_argument('--batch', default=50, type=int,
-                         help='batch size for attack')
+                     help='batch size for attack')
     parser.add_argument('--targeted', action='store_const', const=True,
-                         default=False, help='run targeted attack on all classes')
+                     default=False, help='run targeted attack on all classes')
+    # C&W
+    parser.add_argument('--lr', default=0.01, type=float,
+                     help="learning rate for attack optimization" )
+    # PGD
+    parser.add_argument('--epsilon', default=0.03, type=float,
+                     help="outer step `eps` of PGD attack" )
+    parser.add_argument('--alpha', default=0.007, type=float,
+                     help="inner step `alpha` of PGD attack" )
+    parser.add_argument('--iters', default=30, type=int,
+                     help="number of steps for PGD attack" )
+    parser.add_argument('--norm', default='inf', type=str, choices=['2', 'inf'],
+                     help="norm constraint in PGD")
     args = parser.parse_args()
 
     ############
@@ -164,11 +174,14 @@ def main():
     n_classes=len(trainset.classes)
 
     if args.attack =='cw':
-        attack_func = cw_attack_all # to run cw attack
-        atck_args = dict(lr=args.lr, max_iterations=800, save_attacks=False, conf=0.01)
+        attack_func = cw_attack_all
+        atck_args = dict(lr=args.lr, max_iterations=800, save_attacks=False,
+                        conf=0.01)
     elif args.attack == 'pgd':
-        attack_func = pgd_attack_all # to run pgd attack
-        atck_args = dict(eps=0.03, alpha=0.007, n_iters=60,x_min=-.5,x_max=.5,norm=np.inf)
+        attack_func = pgd_attack_all
+        norm = 2 if args.norm == '2' else np.inf
+        atck_args = dict(eps=args.epsilon, alpha=args.alpha,
+                        n_iters=args.iters, x_min=-.5, x_max=.5, norm=norm)
     elif args.attack == 'boundary':
         attack_func = boundary_attack_all
         atck_args = dict(steps=1000)

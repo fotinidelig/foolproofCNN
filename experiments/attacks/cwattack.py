@@ -30,7 +30,7 @@ def loss(
     refer to the paper for details
     """
     N = input.size(0)
-    max_ = torch.tensor([0]*N).to(input.device)
+    max_ = torch.tensor([0]*N)
     f_i = torch.stack([
     max([logits[i][j] for j in range(len(logits[0])) if j != target[i]]) for i in range(N)
     ])
@@ -85,8 +85,7 @@ def cwattack(
         return const_i, max_const_i, min_const_i, end_iters
 
     N = x.size(0)
-
-    device = x.device
+    use_gpu()
 
     adv_samples = []
     adv_targets = []
@@ -101,18 +100,18 @@ def cwattack(
     if not targeted:
         target, _ = model.predict(x)
 
-    max_const_n = torch.tensor([max_const]*N).to(device).float()
-    min_const_n = torch.tensor([min_const]*N).to(device).float()
-    const_n = torch.tensor([init_const]*N).to(device).float()
+    max_const_n = torch.tensor([max_const]*N).float()
+    min_const_n = torch.tensor([min_const]*N).float()
+    const_n = torch.tensor([init_const]*N).float()
     w_n = torch.zeros_like(x).requires_grad_(True).float() # init
 
     found_atck_n = [False]*N
     best_atck_n = x.clone().detach()
-    best_l2_n = torch.full((N,), np.inf).to(device)
+    best_l2_n = torch.full((N,), np.inf)
     best_const_n = torch.zeros(N)
-    best_w_n = torch.zeros_like(x).to(device)
+    best_w_n = torch.zeros_like(x)
 
-    eps = torch.tensor(np.random.uniform(-0.02, 0.02, x.shape)).to(device) # random noise in range [-0.03, 0.03]
+    eps = torch.tensor(np.random.uniform(-0.02, 0.02, x.shape)) # random noise in range [-0.03, 0.03]
     input = (x+eps).clamp(min=x_min, max=x_max) # control for arctanh NaN values
     inv_input = torch.atanh((input-TO_ADD)/TO_MUL)
     w_n = (inv_input).clone().detach().requires_grad_(True)
@@ -120,7 +119,7 @@ def cwattack(
     for _ in range(bin_steps):
         params = [{'params': w_n}]
         optimizer = torch.optim.Adam(params, lr=lr)
-        cur_fx_n = torch.full((N,), np.inf).to(device)
+        cur_fx_n = torch.full((N,), np.inf)
         for i in range(max_iterations+1):
             adv_n = TO_MUL*torch.tanh(w_n)+TO_ADD
             _, logits_n = model.predict(adv_n, logits=True)
@@ -147,9 +146,9 @@ def cwattack(
         # update parameters
         w_n = w_n.clone().detach()
         if random_init:
-            eps.data = torch.tensor(np.random.uniform(-0.02, 0.02, w_n.shape), device=device)
+            eps.data = torch.tensor(np.random.uniform(-0.02, 0.02, w_n.shape))
         else:
-            eps.data = torch.zeros_like(w_n, device=device)
+            eps.data = torch.zeros_like(w_n)
         for i in range(N):
             # update const
             vals = bin_search_const(const_n[i].item(), max_const_n[i].item(), min_const_n[i].item(), cur_fx_n[i])
@@ -169,12 +168,17 @@ def cw_attack_all(
         model,
         sampleloader,
         targeted,
-        classes,
         dataname,
+        classes,
         save_attacks = False,
         **kwargs
     ):
-    best_atck_all = []
+
+    use_gpu()
+    folder = 'advimages/'+'targeted/' if targeted else 'untargeted/' + "cw/"
+    show_image = show_image_function(classes, folder)
+
+    best_atck = []
     l2_all = []
     const_all = []
     indices_all = []
@@ -182,12 +186,9 @@ def cw_attack_all(
     cnt_all = 0
     total_time = 0
 
-    device = next(model.parameters()).device
-    folder = 'advimages'+'targeted' if targeted else 'untargeted/' + "cw/"
-    show_image = show_image_function(classes, folder)
     for bidx, batch in enumerate(sampleloader):
-        inputs = batch[0].to(device)
-        targets = batch[1].to(device) if targeted else None
+        inputs = batch[0]
+        targets = batch[1] if targeted else None
 
         start_time = tm.time()
         vals = cwattack(model, inputs, targeted, targets, **kwargs)

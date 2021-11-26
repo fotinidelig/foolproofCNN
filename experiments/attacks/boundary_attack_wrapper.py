@@ -17,8 +17,8 @@ import time
 def boundary_attack_all(
     model,
     sampleloader,
+    targeted,
     dataset,
-    targeted=False,
     classes=[],
     steps=1000,
     x_min=-.5,
@@ -27,20 +27,19 @@ def boundary_attack_all(
 ):
     device = next(model.parameters()).device
     # Make sure all tensors are in the same device
-    use_gpu = lambda x=True: torch.set_default_tensor_type(torch.cuda.FloatTensor
-                                             if torch.cuda.is_available() and x
-                                             else torch.FloatTensor)
     use_gpu()
+    show_image = show_image_function(classes, 'advimages/boundary/')
+
+    model.eval()
     bounds = (x_min, x_max)
     foolmodel = PyTorchModel(model, bounds, device=device)
     attacker = BoundaryAttack(steps=steps, init_attack=L2DeepFoolAttack())
 
-    show_image = show_image_function(classes, 'advimages/boundary/')
     adv_imgs = []
     succeeded = 0
     distance = 0
     for batch in sampleloader:
-        inputs = batch[0].to(device)
+        inputs = batch[0]
         if not targeted:
             labels, _ = model.predict(inputs)
         else:
