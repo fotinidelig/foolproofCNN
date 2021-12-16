@@ -10,12 +10,14 @@ from foolbox.attacks.boundary_attack import BoundaryAttack
 from foolbox.attacks.deepfool import L2DeepFoolAttack
 from foolbox.criteria import Misclassification
 from foolbox.models.pytorch import PyTorchModel
+from experiments.models.utils import predict
 
 from .utils import *
 import time
 
 def boundary_attack_all(
     model,
+    model_name,
     sampleloader,
     targeted,
     dataset,
@@ -35,14 +37,13 @@ def boundary_attack_all(
     foolmodel = PyTorchModel(model, bounds, device=device)
     attacker = BoundaryAttack(steps=steps, init_attack=L2DeepFoolAttack())
 
-    adv_imgs = []
-    succeeded = 0
+    best_atck = []
+    successful = 0
     distance = 0
     for batch in sampleloader:
-        inputs = batch[0]
-        if not targeted:
-            labels, _ = model.predict(inputs)
-        else:
+        inputs = batch[0].to(device)
+        labels, _ = predict(model, inputs)
+        if targeted:
             raise ValueError('''
                             Oops! Targeted boundary attack is not implemented.
                             Remove --targeted flag
@@ -50,27 +51,31 @@ def boundary_attack_all(
         criterion = Misclassification(labels)
 
         start_time = time.time()
-        batch_atck = attacker.run(foolmodel, inputs, criterion)
+        output = attacker.run(foolmodel, inputs, criterion)
         total_time = time.time()-start_time
 
-        adv_imgs += batch_atck
-        batch_dist = torch.norm((inputs-batch_atck).view(-1, 1), dim=1)
+        best_atck += output
+        batch_dist = torch.norm((inputs-output).view(inputs.shape[0], -1), dim=1)
         cnt = 0
-        for i in range(len(batch_atck)):
-            output, label = batch_atck[i], labels[i]
-            target = model.predict(output)[0][0]
-            if target != label:
+        for i in range(len(output)):
+            if succeeded(model, output[i], labels[i], None):
                 cnt += 1
                 distance += batch_dist[i]
-                show_image(i, (output, target), (inputs[i], label),
-                        l2=batch_dist[i], with_perturb=True)
-        succeeded += cnt
+                target = predict(model, output[i])[0][0]
+                # show_image(i, (output[i], target), (inputs[i], labels[i]),
+                #         l2=batch_dist[i], with_perturb=True)
+        successful += cnt
         print("\n=> Attack took %f mins"%(total_time/60))
         print(f"Found attack for {cnt}/{len(inputs)} samples.")
 
     # Logs
-    mean_distance = distance/succeeded
-    kwargs = dict(mean_distance=mean_distance)
-    write_attack_log(len(adv_imgs), succeeded, dataset,
-            model.__class__.__name__, total_time, **kwargs)
-    return torch.stack(adv_imgs)
+    mean_distance = distance/successful
+    kwargs = dict()
+    kwargs['mean_distance'] = mean_distance
+    kwargs['Attack'] = 'Boundary'
+    kwargs['total_cnt'] = len(best_atck)
+    kwargs['adv_cnt'] = successful
+    kwargs['dataset'] = dataset
+    kwargs['model'] = model_name
+    write_attack_log(**kwargs)
+    return torch.stack(best_atck).detach()

@@ -4,7 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
-from experiments.fourier.analysis import toDFT, visDFT
+from experiments.fourier.analysis import toDFT, vizDFT
+from experiments.models.utils import predict
 
 ## READ CONFIGURATION PARAMETERS
 import configparser
@@ -18,7 +19,23 @@ use_gpu = lambda x=True: torch.set_default_tensor_type(torch.cuda.FloatTensor
                                          if torch.cuda.is_available() and x
                                          else torch.FloatTensor)
 
-def write_attack_log(total_cnt, adv_cnt, dataset, model, time, **kwargs):
+def succeeded(model, adv_x, label, target=None):
+    '''
+        model: target model
+        adv_x: single adversarial image
+        label: true image label
+        target: target image label if not None
+
+        Returns:
+        true: if adv_x is adversarial
+        false: otherwise
+    '''
+    assert len(adv_x.shape) == 3, "adv_x must be single 3-dimensional image"
+    pred, _ = predict(model, adv_x)
+    success = (target == pred[0]) if target else (label != pred[0])
+    return success
+
+def write_attack_log(total_cnt, adv_cnt, dataset, model, **kwargs):
     success_rate = float(adv_cnt)/total_cnt
 
     f = open(attack_fname, 'a')
@@ -27,7 +44,6 @@ def write_attack_log(total_cnt, adv_cnt, dataset, model, time, **kwargs):
     print("*********", **outputf)
     print(datetime.now(), **outputf)
     print("=> Stats:", **outputf)
-    print(f"Total time: {time}", **outputf)
     print(f"Dataset: {dataset}", **outputf)
     print(f"Model: {model}", **outputf)
     print(f"Success Rate: {(success_rate*100):.2f}% || {adv_cnt}/{total_cnt}", **outputf)
@@ -81,9 +97,9 @@ def show_image_function(classes, folder):
         kwargs['vmax'] = 255
         kwargs['vmin'] = 0
 
-        ax[0].set_title("Class: %s"%classes[label])
+        ax[0].set_title("%s"%classes[label])
         ax[0].imshow(np.transpose(npimgs[0], (1, 2, 0)), **kwargs)
-        ax[2 if with_perturb else 1].set_title("Class: %s"%classes[target])
+        ax[2 if with_perturb else 1].set_title("%s"%classes[target])
         ax[2 if with_perturb else 1].imshow(np.transpose(npimgs[1], (1, 2, 0)), **kwargs)
 
         if with_perturb:
@@ -149,7 +165,10 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
     plt.savefig(f"{path}/{fname}.png")
 
 
-def frequency_l1_diff(x_ben, x_adv, **kwargs):
+def modified_frequencies(x_ben, x_adv, **kwargs):
+    '''
+        Expects `x_ben`, `x_adv` in shape (<N,> C, H, W)
+    '''
     device = x_adv.device
     if len(x_ben.shape) == 3:
         x_ben = torch.view(1,*x_ben.shape()).to(device)
@@ -161,22 +180,25 @@ def frequency_l1_diff(x_ben, x_adv, **kwargs):
     _, f_adv_amps, f_adv_phase = toDFT(x_adv)
 
     diff_per_img = torch.sum(abs(f_ben_amps-f_adv_amps), dim=(1,2,3))
-    percentage_per_frequency = torch.zeros((N, H, W)).to(device)
+    ratio_freq_total = torch.zeros((N, H, W)).to(device)
     for i in range(N):
-        percentage_per_frequency[i] = torch.sum(abs((f_ben_amps[i]-f_adv_amps[i])), dim=(0,))
-        percentage_per_frequency[i] /= diff_per_img[i]
-        percentage_per_frequency[i] *= 100
-    diff_per_freq = torch.median(percentage_per_frequency, dim=0)[0]
+        ratio_freq_total[i] = torch.sum(abs(f_ben_amps[i]-f_adv_amps[i]), dim=(0,))
+        ratio_freq_total[i] /= diff_per_img[i]
+    diff_per_freq = torch.median(ratio_freq_total, dim=0)[0]
 
     fig, ax = plt.subplots(1,1)
     # plot = ax.imshow(ToValidImg(20*np.log10(diff_per_freq.to('cpu'))), cmap='magma')
     plot = ax.imshow(ToValidImg(diff_per_freq.to('cpu')), cmap='magma')
     ax.set_title("Amplitude Distortion %")
 
-    ax.xaxis.set_ticks(range(1, W+1, 5))
-    ax.xaxis.set_ticklabels(list(range(-((W-1)//2), W//2, 5)))
-    ax.yaxis.set_ticks(range(1, H+1, 5))
-    ax.yaxis.set_ticklabels(list(range(-((H-1)//2), H//2, 5)))
+    if(W >= 64 or H >= 64):
+        ax.xaxis.set_visible(False)
+        ax.yaxis.set_visible(False)
+    else:
+        ax.xaxis.set_ticks(range(1, W+1, 5))
+        ax.xaxis.set_ticklabels(list(range(-((W-1)//2), W//2, 5)))
+        ax.yaxis.set_ticks(range(1, H+1, 5))
+        ax.yaxis.set_ticklabels(list(range(-((H-1)//2), H//2, 5)))
 
     fig.colorbar(plot,ax=ax)
     plt.savefig("frequency_l1_diff.png")
