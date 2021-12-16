@@ -6,8 +6,8 @@ import numpy as np
 import torch
 import torchvision
 import torch.nn.functional as F
+from torch.cuda.amp import autocast
 from torch import nn
-# from torchviz import make_dot
 
 ## READ CONFIGURATION PARAMETERS
 import configparser
@@ -48,19 +48,6 @@ class BasicModel(nn.Module):
 
     def forward(self, x):
         raise NotImplementedError
-
-    def predict(self, samples, logits = False):
-        self.eval()
-        # check if x batch of samples or sample
-        if len(samples.size()) < 4:
-            samples = torch.reshape(samples, (1, *samples.size()))
-
-        logs = self.forward(samples.float())
-        if logits:
-            return torch.argmax(logs, 1), logs
-        probs = torch.nn.Softmax(dim=1)(logs)
-        return torch.argmax(probs, 1), probs
-
 
 class BasicResBlock(nn.Module):
     ## BN -> RELU -> CONV (x2)
@@ -122,6 +109,13 @@ def train(
     model_name = None,
     **kwargs
 ):
+    '''
+        Optimizations used in training:
+        *automatic mixed precision (amp) of model weights
+        *cuDNN autotuner for convolution computations
+        *num_workers>0 and pin_memory=True in DataLoaders
+        *param.grad=None instead of optimizer.zero_grad()
+    '''
     # turn on training mode, necessary for dropout/batch_norm layers
     model.train()
 
@@ -148,7 +142,8 @@ def train(
             loss = criterion(pred, targets)
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad()
+            for param in model.parameters():
+                param.grad = None
             iters.append(i)
             losses.append(float(loss.item())*batch_size)
         # if epoch%5 == 0:
@@ -168,6 +163,18 @@ def train(
     torch.save(model.state_dict(), f"pretrained/{model_name}.pt")
 
 
+def predict(model, samples, logits = False):
+    model.eval()
+    # check if x batch of samples or sample
+    if len(samples.size()) < 4:
+        samples = torch.reshape(samples, (1, *samples.size()))
+
+    logs = model(samples.float())
+    if logits:
+        return torch.argmax(logs, 1), logs
+    probs = torch.nn.Softmax(dim=1)(logs)
+    return torch.argmax(probs, 1), probs
+
 def calc_accuracy(model, testloader):
     with torch.no_grad():
         model.eval()
@@ -178,8 +185,7 @@ def calc_accuracy(model, testloader):
             total += samples.size(0)
             samples = samples.to(device)
             targets = targets.to(device)
-            out=model(samples)
-            labels = torch.argmax(out, dim=1)
+            labels = predict(model, samples)[0]
 
             accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
 
@@ -198,12 +204,13 @@ def write_train_output(model, model_name, accuracy, **kwargs):
     print("=><=", **outputf)
 
 def learning_curve(iters, losses, epoch, lr, batch_size, filename):
-    plt.clf()
     plt.rcParams["font.family"] = "serif"
     plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
     plt.xlabel("Iterations")
     plt.ylabel("Loss")
     plt.plot(iters, losses)
+    if not os.path.isdir('training_plots'):
+        os.makedirs('training_plots')
     plt.savefig(f"training_plots/{filename}.png")
 
 ## Debug-friendly-functions

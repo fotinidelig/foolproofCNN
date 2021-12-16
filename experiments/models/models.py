@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from typing import Optional
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet34, resnet50, resnet101
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -139,23 +139,33 @@ class WideResNet(BasicModel):
         out = self.group3(out)
         out = self.group4(out)
         out = F.relu(self.bn1(out), inplace=True)
-        out = F.adaptive_avg_pool2d(out, 1)
-        N, C, W, H = (*(out.shape),)
-        out = out.view(-1, C*W*H)
+        out = F.avg_pool2d(out, 8)
+        out = out.view(out.size(0), -1)
         logits = self.fc(out)
 
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
         return logits
 
 ## Load ResNet-18 for Tiny ImageNet
-def tiny_imagenet_model(pretrained, grads=True):
-    model = resnet18(pretrained=pretrained)
+def resnet_model(layers=18, classes=200, pretrained=True, grads=True):
+    if layers == 18:
+        resnet = resnet18
+    elif layers == 34:
+        resnet = resnet34
+    elif layers == 50:
+        resnet = resnet50
+    elif layers == 101:
+        resnet = resnet101
+    model = resnet(pretrained=pretrained)
     model.avgpool = nn.AdaptiveAvgPool2d(1)
     if pretrained and not grads:
         for param in model.parameters():
             param.requires_grad = False
-    model.fc = nn.Linear(512, 200)
-    print(model)
+    params = {k:v for k,v in model.named_parameters()}
+    out = list(params.values())[-3].shape # last BN layer
+    model.fc = nn.Linear(out[0], classes)
+    if verbose:
+        print("\n", model)
     return model
 
 def finetune_params(model):
