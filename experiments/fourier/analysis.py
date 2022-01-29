@@ -89,7 +89,8 @@ def filterImage(images: torch.tensor, filter, threshold = Union[int, tuple]):
 
 def vizDFT(
     amps: torch.tensor,
-    fname = None
+    fname = None,
+    title = None
 ):
     def normalize(amplitudes):
         amplitudes = 20*np.log10(amplitudes)
@@ -102,5 +103,7 @@ def vizDFT(
     axis.xaxis.set_visible(False)
     axis.yaxis.set_visible(False)
     axis.imshow(amps)
-    axis.set_title("Amplitude(dB)")
+    axis.set_title(title if title != None else "Amplitude(dB)")
+    if fname:
+        plt.savefig(f"{fname}.png")
     plt.show()

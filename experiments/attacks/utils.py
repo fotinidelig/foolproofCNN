@@ -92,10 +92,7 @@ def show_image_function(classes, folder):
         adv_img, target = adv_img
         img, label = img
         npimgs = img_pipeline([img, adv_img])
-
         kwargs = img.size()[0]==1 and {'cmap': 'gray'} or {}
-        kwargs['vmax'] = 255
-        kwargs['vmin'] = 0
 
         ax[0].set_title("%s"%classes[label])
         ax[0].imshow(np.transpose(npimgs[0], (1, 2, 0)), **kwargs)
@@ -111,7 +108,8 @@ def show_image_function(classes, folder):
 
         if not os.path.isdir(folder):
             os.makedirs(folder)
-        plt.savefig(f"{folder}sample_{idx}_{classes[target]}.png")
+        plt.savefig(f"{folder}sample_{idx}_{classes[target]}.png", bbox_inches='tight')
+        plt.savefig(f"{folder}sample_{idx}_{classes[target]}.svg", bbox_inches='tight')
         plt.show()
     return show_image
 
@@ -135,8 +133,9 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
     def set_axis_style(ax):
         ax.xaxis.set_label_position('top')
         ax.xaxis.set_ticklabels([])
-        ax.yaxis.set_label_position('left')
+        ax.xaxis.set_ticks([])
         ax.yaxis.set_ticklabels([])
+        ax.yaxis.set_ticks([])
 
     N = len(adv_imgs)
     M = len(adv_imgs[0])
@@ -145,24 +144,30 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
     plt.rcParams["font.family"] = "serif"
 
     xy_style = [set_axis_style(ax[i][j]) for i in range(N) for j in range(M)]
-    row_0_style = [ax[0][c].set_xlabel(classes[c]) for c in range(M)]
+    for c in range(M):
+        ax[0][c].set_xlabel(classes[c])
+
     if "hide_col_label" not in kwargs.keys():
         col_0_style = [ax[c][0].set_ylabel(classes[c]) for c in range(N)]
 
     if "suptitle" in kwargs.keys():
         fig.suptitle(kwargs["suptitle"])
-
     # iterate over natural image rows
+
     pl = [0]*N
     kwargs = adv_imgs[0][0].size()[0]==1 and {'cmap': 'gray'} or {}
     for n, c_imgs in enumerate(adv_imgs):
         c_imgs = img_pipeline(c_imgs)
-        pl[n] = [ax[n][i].imshow(np.transpose(c_imgs[i], (1, 2, 0)), **kwargs) for i in range(M)]
+        if M==N:
+            pl[n] = [ax[i][n].imshow(np.transpose(c_imgs[i], (1, 2, 0)), **kwargs) for i in range(M)]
+        else:
+            pl[n] = [ax[n][i].imshow(np.transpose(c_imgs[i], (1, 2, 0)), **kwargs) for i in range(M)]
 
     path = f"advimages/grid"
     if not os.path.isdir(path):
         os.makedirs(path)
-    plt.savefig(f"{path}/{fname}.png")
+    plt.savefig(f"{path}/{fname}.png", bbox_inches='tight')
+    plt.savefig(f"{path}/{fname}.svg",bbox_inches='tight')
 
 
 def modified_frequencies(x_ben, x_adv, **kwargs):
@@ -186,7 +191,7 @@ def modified_frequencies(x_ben, x_adv, **kwargs):
         ratio_freq_total[i] /= diff_per_img[i]
     diff_per_freq = torch.median(ratio_freq_total, dim=0)[0]
 
-    fig, ax = plt.subplots(1,1)
+    fig, ax = plt.subplots(1,1, dpi=300)
     # plot = ax.imshow(ToValidImg(20*np.log10(diff_per_freq.to('cpu'))), cmap='magma')
     plot = ax.imshow(ToValidImg(diff_per_freq.to('cpu')), cmap='magma')
     ax.set_title("Amplitude Distortion %")
@@ -201,5 +206,28 @@ def modified_frequencies(x_ben, x_adv, **kwargs):
         ax.yaxis.set_ticklabels(list(range(-((H-1)//2), H//2, 5)))
 
     fig.colorbar(plot,ax=ax)
-    plt.savefig("frequency_l1_diff.png")
+    plt.savefig("frequency_l1_diff.png", bbox_inches='tight')
+    plt.savefig("frequency_l1_diff.svg", bbox_inches='tight')
     plt.show()
+
+def equal_samples(n_classes, dataloader, model, device):
+    # creates list with n_samples-images from n_classes-classes
+    counters = dict()
+    n_samples = 50
+    imgs = []
+    labs = []
+    for batch in dataloader:
+        for im, lab in zip(batch[0],batch[1]):
+            if predict(model, im.to(device))[0][0] != lab:
+                continue
+            if str(lab) not in counters.keys():
+                counters[str(lab)] = 0
+            if counters[str(lab)] < n_samples:
+                imgs.append(im)
+                labs.append(lab)
+                counters[str(lab)] += 1
+            if sum([counters[k] == n_samples for k in counters.keys()]) == n_classes:
+                break
+    assert len(list(counters.keys())) == n_classes, "Not all classes are represented"
+    assert sum([counters[k] == n_samples for k in counters.keys()]) == n_classes, "Not all classes with n_samples"
+    return imgs, labs

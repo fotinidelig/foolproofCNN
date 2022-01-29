@@ -53,7 +53,7 @@ def cwattack(
         conf=0,
         bin_steps=10,
         max_iterations=1000,
-        lr=0.005,
+        lr=0.01,
         x_min = -0.5,
         x_max = 0.5,
         random_init = True
@@ -173,6 +173,7 @@ def cw_attack_all(
         dataset,
         classes,
         save_attacks = False,
+        class_pairs = None,
         **kwargs
     ):
     use_gpu()
@@ -206,12 +207,11 @@ def cw_attack_all(
                 cnt += 1
                 target = predict(model, output[i])[0][0]
                 unique_idx = int(i + cnt_all - len(output) + target) # index of image across all batches + attack label
-                # show_image(unique_idx, (output[i], target), (inputs[i], labels[i]),
-                #         l2=vals[1][i], with_perturb=True)
-                # if save_attacks:
-                #     save_images(output[i], f'saved/target/{classes[target]}/', str(unique_idx))
-                #     save_images(output[i], f'saved/orig/{classes[label]}/', str(unique_idx)+classes[target])
-                #     path = f'saved/orig/{classes[label]}/{str(unique_idx)+classes[target]}.png'
+                show_image(unique_idx, (output[i], target), (inputs[i], labels[i]),
+                        l2=vals[1][i], with_perturb=True)
+                if class_pairs:
+                    # save true and target label pairs in dict
+                    class_pairs[str(int(labels[i]))][str(int(target))] += 1
 
         print("\n=> Attack took %f mins"%(batch_time/60))
         print(f"Found attack for {cnt}/{len(output)} samples.")
