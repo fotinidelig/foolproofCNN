@@ -5,10 +5,11 @@ import torch
 from torch.utils.data import DataLoader
 import torchvision.transforms as T
 from torchvision.datasets import MNIST, CIFAR10, ImageFolder, DatasetFolder
+from torchinfo import summary
 from experiments.fourier.gauss_filtering import *
 from experiments.fourier.box_filtering import *
 from experiments.fourier.analysis import FourierFilter
-
+from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST, resnet_model, effnet_model
 
 def normalize(data: torch.tensor):
     '''
@@ -43,7 +44,9 @@ def load_data(
     threshold: Union[int, tuple]=None,
     empirical_norm=False,
     filter_test=False,
-    output_size: tuple=None
+    input_size: tuple=(32, 32),
+    output_size: tuple=None,
+    validation = False,
 ):
     '''
         Loads datasets from torchvision.datasets or custom
@@ -70,6 +73,7 @@ def load_data(
     filterT = filtering(filter, threshold) if filter else T.Lambda(lambda t: t)
 
     downsize = T.Resize(output_size) if output_size else T.Lambda(lambda t: t)
+    output_size = output_size if output_size else input_size
 
     transform_test = T.Compose([T.ToTensor(), normalize, downsize])
     transform_standard = T.Compose([T.ToTensor(), normalize, downsize, filterT])
@@ -79,7 +83,7 @@ def load_data(
             downsize,
             filterT,
             T.Pad(4, padding_mode='reflect'),
-            T.RandomCrop(32),
+            T.RandomCrop(max(output_size)),
             T.RandomHorizontalFlip()])
 
     # choose augmented or standard train set
@@ -89,6 +93,7 @@ def load_data(
     if filter_test:
         transform_test = transform_standard
 
+    # load data
     if dataclass:
         trainset = dataclass(root=root, train=True,
                            download=True, transform=transform_train)
@@ -98,30 +103,67 @@ def load_data(
         trainset = ImageFolder(root+'train', transform=transform_train)
         testset = ImageFolder(root+'test', transform=transform_test)
 
+    # create validation set
+    if validation and dataclass:
+        if dataclass:
+            size = len(trainset.data)
+        else:
+            size = len(trainset.samples)
+        trainset, validset = torch.utils.data.random_split(trainset, [int(size*0.9),int(size*0.1)])
+    if validation and not dataclass:
+        validset = ImageFolder(root+'val', transform=transform_train)
+
+    # create data loaders
     trainloader = DataLoader(trainset, batch_size=batch_size,
                        shuffle=True, num_workers=num_workers, pin_memory=True)
     testloader = DataLoader(testset, batch_size=batch_size,
-                       shuffle=False, num_workers=num_workers, pin_memory=True)
+                       shuffle=True, num_workers=num_workers, pin_memory=True)
+    if validation:
+        validloader = DataLoader(validset, batch_size=batch_size,
+                           shuffle=True, num_workers=num_workers, pin_memory=True)
+        return trainset, trainloader, testset, testloader, validloader
     return trainset, trainloader, testset, testloader
 
 
 def load_wrap(batch_size, root, dataset, model, augment, filter, threshold, **kwargs):
     if root:
         print(f"=> Loading dataset from path {root}")
-        trainset, trainloader, testset, testloader = load_data(None, root=root, batch_size=batch_size,# output_size=(128,128),
+        vals = load_data(None, root=root, batch_size=batch_size,
                                                  augment=augment, filter=filter, threshold=threshold, **kwargs)
     else:
         if dataset == 'cifar10':
             print("=> Loading CIFAR10 dataset")
-            trainset, trainloader, testset, testloader = load_data(CIFAR10, root='./data', batch_size=batch_size,
+            vals = load_data(CIFAR10, root='./data', batch_size=batch_size,
                                                  augment=augment, filter=filter, threshold=threshold, **kwargs)
         if dataset == 'mnist' or model =='cwmnist':
             print("=> Loading MNIST dataset")
-            trainset, trainloader, testset, testloader = load_data(MNIST, root='./data', batch_size=batch_size,
+            vals = load_data(MNIST, root='./data', batch_size=batch_size,
                                                  augment=augment, filter=filter, threshold=threshold, **kwargs)
+    return vals
 
-    return trainset, trainloader, testset, testloader
+def load_model(model, classes, args):
+    transfer_learn = True
+    if 'transfer_learn' not in args:
+        transfer_learn = False
 
+    if model == "cwcifar10":
+        model = CWCIFAR10()
+    elif model == "cwmnist":
+        model = CWMNIST()
+    elif model == "wideresnet":
+        model = WideResNet(i_channels=3, depth=args.depth, width=args.width)
+    elif model == "resnet":
+        model = resnet_model(args.layers, classes, transfer_learn, True)
+    elif model == "effnet":
+        model = effnet_model(classes, transfer_learn, True)
+    if not args.model_name:
+        model_name = model.__class__.__name__
+    else:
+        model_name = args.model_name
+    print(f"Model Name: {model_name}")
+    summary(model,(128,3,32,32), depth=1,
+            col_names=["output_size","kernel_size"])
+    return model, model_name
 
 def x_max_min(loader):
     '''

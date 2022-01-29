@@ -6,8 +6,7 @@ import numpy as np
 import time
 
 from experiments.models.utils import write_train_output, train, calc_accuracy
-from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST, resnet_model
-from experiments.utils import load_wrap
+from experiments.utils import load_wrap, load_model
 from experiments.parser import parser
 
 import torch
@@ -29,6 +28,9 @@ def main():
     ############
 
     args = parser(train=True, attack=False)
+    threshold = (*[int(val) for val in args.threshold.split(',')],) if args.threshold else None
+    input_size = (*[int(val) for val in args.input_size.split(',')],)
+    output_size = (*[int(val) for val in args.output_size.split(',')],) if args.output_size else None
 
     ############
     ## GLOBAL ##
@@ -41,9 +43,10 @@ def main():
     ## Load Dataset ##
     ##################
 
-    threshold = (*[int(val) for val in args.threshold.split(',')],) if args.threshold else None
-    trainset, trainloader, testset, testloader = load_wrap(BATCH_SIZE, args.root, args.dataset, args.model,
-                                                            args.augment, args.filter, threshold)
+    trainset, trainloader, testset, testloader, validloader = load_wrap(BATCH_SIZE, args.root, args.dataset,
+                                                            args.model, args.augment, args.filter, threshold,
+                                                            input_size=input_size, output_size=output_size,
+                                                            validation=True)
     ###########
     ## Train ##
     ###########
@@ -56,22 +59,10 @@ def main():
     else:
         print("=> Using device: CPU")
 
-    if args.model == "cwcifar10":
-        model = CWCIFAR10()
-    if args.model == "cwmnist":
-        model = CWMNIST()
-    if args.model == "wideresnet":
-        model = WideResNet(i_channels=3, depth=args.depth, width=args.width)
-    if args.model == "resnet":
-        classes = len(trainset.classes)
-        model = resnet_model(args.layers, classes, True, True)
-    if args.model_name:
-        model_name = args.model_name
-    else:
-        model_name = model.__class__.__name__
-    print(f"Model Name: {model_name}")
-
+    classes = len(testset.classes)
+    model, model_name = load_model(args.model, classes, args)
     model = model.to(device)
+    
     train_time = 0
     if args.pretrained:
         print("\n=> Using pretrained model.")
@@ -79,7 +70,7 @@ def main():
     else:
         print("\n=> Training...")
         start_time = time.time()
-        train(model, trainloader, epochs=args.epochs, lr=args.lr, lr_decay=args.lr_decay,
+        train(model, trainloader, validloader, epochs=args.epochs, lr=args.lr, lr_decay=args.lr_decay,
                  model_name=model_name, l_curve_name=model_name)
         train_time = time.time() - start_time
         print("\n=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
@@ -98,7 +89,8 @@ def main():
     ## only when filter is applied
     if args.threshold:
         _, _, _, filtered_testloader = load_wrap(BATCH_SIZE, args.root, args.dataset, args.model,
-                                                    args.augment, args.filter, threshold, filter_test=True)
+                                                    args.augment, args.filter, threshold, filter_test=True,
+                                                    input_size=input_size, output_size=output_size)
 
         accuracy_filtered = calc_accuracy(model, filtered_testloader)
         out_args['filter'] = f"{args.filter}, threshold: {threshold}"

@@ -5,12 +5,11 @@ import numpy as np
 import time
 
 from experiments.models.utils import predict, calc_accuracy
-from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST, resnet_model
 from experiments.attacks.cwattack import cw_attack_all
 from experiments.attacks.boundary_attack_wrapper import boundary_attack_all
 from experiments.attacks.pgd import pgd_attack_all
-from experiments.attacks.utils import modified_frequencies
-from experiments.utils import load_wrap
+from experiments.attacks.utils import modified_frequencies, equal_samples
+from experiments.utils import load_wrap, load_model
 from experiments.parser import parser
 
 ## DEBUG
@@ -35,16 +34,25 @@ def main():
     ############
 
     args = parser(train=False, attack=True)
+    threshold = (*[int(val) for val in args.threshold.split(',')],) if args.threshold else None
+    input_size = (*[int(val) for val in args.input_size.split(',')],)
+    output_size = (*[int(val) for val in args.output_size.split(',')],) if args.output_size else None
+
+    ############
+    ## GLOBAL ##
+    ############
+
+    BATCH_SIZE = 128
+    NUM_WORKERS = 2
 
     ##################
     ## Load Dataset ##
     ##################
 
-    BATCH_SIZE = 128
-    NUM_WORKERS = 2
-    threshold = (*[int(val) for val in args.threshold.split(',')],) if args.threshold else None
+
     trainset, trainloader, testset, testloader = load_wrap(BATCH_SIZE, args.root, args.dataset, args.model,
-                                                            False, None, None)
+                                                            False, None, None, input_size=input_size,
+                                                            output_size=output_size)
 
     ###########
     ## Model ##
@@ -57,22 +65,8 @@ def main():
     else:
         print("=> Using device: CPU")
 
-    if args.model == "cwcifar10":
-        model = CWCIFAR10()
-    if args.model == "cwmnist":
-        model = CWMNIST()
-    if args.model == "wideresnet":
-        model = WideResNet(i_channels=3, depth=args.depth, width=args.width)
-    if args.model == "resnet":
-        classes = len(trainset.classes)
-        model = resnet_model(args.layers, classes, True, True)
-
-    if args.model_name:
-        model_name = args.model_name
-    else:
-        model_name = model.__class__.__name__
-    print(f"Model Name: {model_name}")
-
+    classes = len(testset.classes)
+    model, model_name = load_model(args.model, classes, args)
     model = model.to(device)
     model.eval() # only used for inference
     print("\n=> Using pretrained model.")
@@ -106,30 +100,36 @@ def main():
     dataiter = iter(sampleloader)
     device = next(model.parameters()).device
     i = 0
-    while i < args.samples:
-        data = dataiter.next()
-        img = torch.reshape(data[0],data[0].size()[1:])
-        label = int(data[1][0])
 
-        if predict(model, img.to(device))[0][0] == label:
-            i+=1
-            input_imgs.append(img)
-            input_labs.append(label)
+    if args.samples == 0:
+        input_imgs, input_labs = equal_samples(n_classes, trainloader,
+                                               model, device)
+    else:
+        while i < args.samples:
+            data = dataiter.next()
+            img = torch.reshape(data[0],data[0].size()[1:])
+            label = int(data[1][0])
+
+            if predict(model, img.to(device))[0][0] == label:
+                i+=1
+                input_imgs.append(img)
+                input_labs.append(label)
 
     iterations = 1 if not args.targeted else n_classes
-    cnt1, cnt2 = 0,0
-    for i in range(iterations):
-        print(f"\n=> Running attack with {samples} samples.")
-        target = i if targeted else -1 # target class
+    dataset = sampleloader.dataset.__class__.__name__
+    classes = sampleloader.dataset.classes
 
+    for i in range(iterations):
+        print(f"\n=> Running attack with {args.samples} samples.")
+        target = i if args.targeted else -1 # target class
         inputset = TensorDataset(torch.stack(input_imgs),
                                 torch.tensor([target for i in range(len(input_imgs))]))
         inputloader = DataLoader(inputset, batch_size=args.batch, shuffle=False)
 
-        dataset = sampleloader.dataset.__class__.__name__
-        classes = sampleloader.dataset.classes
-        advimgs = attack_func(model, model_name, inputloader, targeted, dataset, classes,**atck_args)
+        advimgs = attack_func(model, model_name, inputloader, args.targeted, dataset, classes,**atck_args)
 
         modified_frequencies(torch.stack(input_imgs), advimgs.detach())
+
+
 if __name__ == "__main__":
     main()
