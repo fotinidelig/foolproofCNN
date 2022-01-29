@@ -100,6 +100,7 @@ class WideResBlock(nn.Module):
 def train(
     model,
     trainloader,
+    valloader=None,
     lr = .01,
     lr_decay = 1, # set to 1 for no effect
     epochs = 40,
@@ -128,11 +129,12 @@ def train(
     criterion = nn.CrossEntropyLoss().to(device)
     batch_size = trainloader.batch_size
     loss_p_epoch = []
+    val_loss_p_epoch = []
     total_inputs = 0
 
     for epoch in range(epochs):
         iters = []
-        losses = []
+        losses = 0
         start_time = time.time()
         for i, batch in enumerate(trainloader, 0):
             total_inputs += batch[0].size(0)
@@ -145,18 +147,21 @@ def train(
             for param in model.parameters():
                 param.grad = None
             iters.append(i)
-            losses.append(float(loss.item())*batch_size)
-        # if epoch%5 == 0:
-        cur_lr = optimizer.param_groups[0]["lr"]
-        scheduler.step()
+            losses += float(loss.item())
 
-        loss_p_epoch.append(sum(losses)/total_inputs)
         epoch_time = time.time()-start_time
+        loss_p_epoch.append(losses/(i+1))
         if verbose:
             print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
-                    (epoch, loss_p_epoch[-1], cur_lr, epoch_time/60))
+            (epoch, loss_p_epoch[-1], optimizer.param_groups[0]["lr"], epoch_time/60))
+        if valloader:
+            val_loss = validate_model(model, valloader, device)
+            val_loss_p_epoch.append(val_loss)
+            print("=> [EPOCH %d] VAL LOSS = %.4f"%(epoch, val_loss))
+        scheduler.step()
+
     if 'l_curve_name' in kwargs.keys():
-        learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['l_curve_name'])
+        learning_curve(np.arange(epochs), loss_p_epoch, val_loss_p_epoch, "all", lr, batch_size, kwargs['l_curve_name'])
     if not os.path.isdir('models'):
         os.makedirs('models')
     model_name = model.__class__.__name__ if not model_name else model_name
@@ -192,6 +197,15 @@ def calc_accuracy(model, testloader):
     accuracy = float(accuracy/total)
     return accuracy
 
+def validate_model(model, valloader, device):
+    model.eval()
+    loss = 0
+    for i, (samples, labels) in enumerate(valloader):
+        out = model(samples.to(device).float())
+        loss += nn.CrossEntropyLoss()(out, labels.to(device)).item()
+    model.train()
+    return loss/(i+1)
+
 def write_train_output(model, model_name, accuracy, **kwargs):
     f = open(train_fname, 'a')
     outputf = dict(file=f)
@@ -203,12 +217,15 @@ def write_train_output(model, model_name, accuracy, **kwargs):
     print("Test accuracy: %.2f"%(accuracy*100),"%", **outputf)
     print("=><=", **outputf)
 
-def learning_curve(iters, losses, epoch, lr, batch_size, filename):
+def learning_curve(iters, losses, val_losses, epoch, lr, batch_size, filename):
     plt.rcParams["font.family"] = "serif"
     plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
     plt.xlabel("Iterations")
     plt.ylabel("Loss")
-    plt.plot(iters, losses)
+    plt.plot(iters, losses, label="train loss")
+    if val_losses != [] and val_losses:
+        plt.plot(iters, val_losses, label="val loss")
+        plt.legend()
     if not os.path.isdir('training_plots'):
         os.makedirs('training_plots')
     plt.savefig(f"training_plots/{filename}.png")

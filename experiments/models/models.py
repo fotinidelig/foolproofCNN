@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from typing import Optional
-from torchvision.models import resnet18, resnet34, resnet50, resnet101
+from torchvision.models import resnet18, resnet34, resnet50, resnet101, efficientnet_b0
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -146,7 +146,7 @@ class WideResNet(BasicModel):
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
         return logits
 
-## Load ResNet-18 for Tiny ImageNet
+## Load ResNet-[18,34,50,101]
 def resnet_model(layers=18, classes=200, pretrained=True, grads=True):
     if layers == 18:
         resnet = resnet18
@@ -157,13 +157,21 @@ def resnet_model(layers=18, classes=200, pretrained=True, grads=True):
     elif layers == 101:
         resnet = resnet101
     model = resnet(pretrained=pretrained)
-    model.avgpool = nn.AdaptiveAvgPool2d(1)
     if pretrained and not grads:
         for param in model.parameters():
             param.requires_grad = False
-    params = {k:v for k,v in model.named_parameters()}
-    out = list(params.values())[-3].shape # last BN layer
-    model.fc = nn.Linear(out[0], classes)
+    model.fc = nn.Linear(512, out_features=classes, bias=True)
+    if verbose:
+        print("\n", model)
+    return model
+
+def effnet_model(classes=200, pretrained=True, grads=True):
+    model = efficientnet_b0(pretrained=pretrained)
+    if pretrained and not grads:
+        for param in model.parameters():
+            param.requires_grad = False
+    model.classifier = nn.Sequential(nn.Dropout(0.2,inplace=True),
+                                     nn.Linear(1280, classes, bias=True))
     if verbose:
         print("\n", model)
     return model
