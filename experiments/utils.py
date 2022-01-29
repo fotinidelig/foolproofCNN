@@ -79,6 +79,7 @@ def load_data(
             downsize,
             filterT,
             T.Pad(4, padding_mode='reflect'),
+            T.RandomCrop(32),
             T.RandomHorizontalFlip()])
 
     # choose augmented or standard train set
