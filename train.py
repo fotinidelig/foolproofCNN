@@ -80,6 +80,7 @@ def main():
     ##############
 
     accuracy = calc_accuracy(model, testloader)
+    tSNE(model, args.model, trainloader, testset.classes)
 
     out_args = dict(LR=args.lr, LR_Decay=args.lr_decay, Runtime=train_time/60)
     if args.model == 'wideresnet':

@@ -16,7 +16,7 @@ def parser(train=True, advtrain=False, attack=False):
     # Model
     parser.add_argument('--model_name', default=None, type=str,
                         help='name to save or load model from')
-    parser.add_argument('--model', default='cwcifar10', choices=['cwcifar10', 'cwmnist', 'wideresnet', 'resnet', 'effnet'],
+    parser.add_argument('--model', default='cwcifar10', choices=['cwcifar10', 'cwmnist', 'wideresnet', 'resnet', 'effnet', 'googlenet'],
                         help='define the model architecture you want to use (def. cwcifar10)')
     parser.add_argument('--layers', default=18, type=int, choices=[18, 34, 50, 101],
                         help='number or resnet layers (def. 18)')

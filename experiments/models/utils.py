@@ -245,3 +245,50 @@ def debug_activations(model, layer):
             activation[name] = output.detach()
         return hook
     model[layer].register_forward_hook(get_activation(layer))
+
+
+def tSNE(model, model_class, dataloader, classes):
+    plt.rcParams["font.family"] = "serif"
+    plt.axis(False)
+    n_classes = len(classes)
+    # change model so that it doesn't use the fc classifier layers
+    if model_class == 'cwcifar10':
+        model.fc1 = Identity()
+        model.fc2 = Identity()
+        model.fc3 = Identity()
+        model.dropout = Identity()
+    else:
+        model.fc = Identity()
+
+    model.eval()
+    feat_points = []
+    index = 0
+    class_index = dict(zip(list(range(n_classes)),[[]]*n_classes))
+    for _, batch in enumerate(dataloader):
+        x = batch[0].to(device)
+        y = batch[1].to(device)
+        out = model(x)
+        feat_points += out
+        for j in range(len(batch[1])):
+            class_index[int(y[j])].append(j+index)
+        index += len(batch[1])
+
+    feat_points = torch.stack(feat_points)
+    perpl = [500,1000,2000]
+    iters = [100,500,1000,2000]
+
+    colors = []
+    for i in range(n_classes):
+        colors.append("#"+''.join([random.choice('ABCDEF0123456789') for i in range(6)]))
+
+    # grid search for best tSNE results
+    for perplexity in perpl:
+        for n_iter in iters:
+            map_points = TSNE(n_components=2,perplexity=perplexity,
+                                learning_rate='auto',
+                                n_iter=n_iter).fit_transform(feat_points)
+            for i in range(n_classes):
+                plt.scatter(map_points[class_index[i]][0],
+                            map_points[class_index[i]][1],color=colors[i])
+            plt.savefig(f"tsne_{perplexity}_{n_iter}.svg",bbox_inches='tight')
+    return

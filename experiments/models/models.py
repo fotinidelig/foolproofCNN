@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from typing import Optional
-from torchvision.models import resnet18, resnet34, resnet50, resnet101, efficientnet_b0
+from torchvision.models import resnet18, resnet34, resnet50, resnet101, efficientnet_b0, googlenet
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -172,6 +172,16 @@ def effnet_model(classes=200, pretrained=True, grads=True):
             param.requires_grad = False
     model.classifier = nn.Sequential(nn.Dropout(0.2,inplace=True),
                                      nn.Linear(1280, classes, bias=True))
+    if verbose:
+        print("\n", model)
+    return model
+
+def googlenet_model(classes=200, pretrained=True, grads=True):
+    model = googlenet(pretrained=pretrained)
+    if pretrained and not grads:
+        for param in model.parameters():
+            param.requires_grad = False
+    model.fc = nn.Linear(1024, out_features=classes, bias=True)
     if verbose:
         print("\n", model)
     return model

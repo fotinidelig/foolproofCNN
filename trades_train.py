@@ -56,8 +56,8 @@ def main():
 
     classes = len(testset.classes)
     model, model_name = load_model(args.model, classes, args)
-    print(model,model_name)
     model = model.to(device)
+    
     train_time = 0
     if args.pretrained:
         print("\n=> Using pretrained model.")

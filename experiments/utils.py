@@ -9,7 +9,7 @@ from torchinfo import summary
 from experiments.fourier.gauss_filtering import *
 from experiments.fourier.box_filtering import *
 from experiments.fourier.analysis import FourierFilter
-from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST, resnet_model, effnet_model
+from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST, resnet_model, effnet_model,googlenet_model
 
 def normalize(data: torch.tensor):
     '''
@@ -143,7 +143,7 @@ def load_wrap(batch_size, root, dataset, model, augment, filter, threshold, **kw
 
 def load_model(model, classes, args):
     transfer_learn = True
-    if 'transfer_learn' not in args:
+    if 'transfer_learn' not in args and 'attack' not in args:
         transfer_learn = False
 
     if model == "cwcifar10":
@@ -156,13 +156,15 @@ def load_model(model, classes, args):
         model = resnet_model(args.layers, classes, transfer_learn, True)
     elif model == "effnet":
         model = effnet_model(classes, transfer_learn, True)
+    elif model == "googlenet":
+        model = googlenet_model(classes, transfer_learn, True)
     if not args.model_name:
         model_name = model.__class__.__name__
     else:
         model_name = args.model_name
     print(f"Model Name: {model_name}")
-    summary(model,(128,3,32,32), depth=1,
-            col_names=["output_size","kernel_size"])
+    # summary(model,(128,3,32,32), depth=1,
+    #         col_names=["output_size","kernel_size"])
     return model, model_name
 
 def x_max_min(loader):

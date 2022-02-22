@@ -1,5 +1,6 @@
 import torch
 from torchvision.utils import save_image
+import torchvision
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -86,8 +87,8 @@ def show_image_function(classes, folder):
         set_axis_style(ax[0])
         set_axis_style(ax[2 if with_perturb else 1])
 
-        if l2:
-            fig.suptitle(f'L2 distance: {l2:.5f}', fontsize=16)
+        # if l2:
+        #     fig.suptitle(f'L2 distance: {l2:.5f}', fontsize=16)
 
         adv_img, target = adv_img
         img, label = img
@@ -108,7 +109,7 @@ def show_image_function(classes, folder):
 
         if not os.path.isdir(folder):
             os.makedirs(folder)
-        plt.savefig(f"{folder}sample_{idx}_{classes[target]}.png", bbox_inches='tight')
+        # plt.savefig(f"{folder}sample_{idx}_{classes[target]}.png", bbox_inches='tight')
         plt.savefig(f"{folder}sample_{idx}_{classes[target]}.svg", bbox_inches='tight')
         plt.show()
     return show_image
@@ -193,22 +194,52 @@ def modified_frequencies(x_ben, x_adv, **kwargs):
 
     fig, ax = plt.subplots(1,1, dpi=300)
     # plot = ax.imshow(ToValidImg(20*np.log10(diff_per_freq.to('cpu'))), cmap='magma')
-    plot = ax.imshow(ToValidImg(diff_per_freq.to('cpu')), cmap='magma')
-    ax.set_title("Amplitude Distortion %")
 
-    if(W >= 64 or H >= 64):
-        ax.xaxis.set_visible(False)
-        ax.yaxis.set_visible(False)
-    else:
-        ax.xaxis.set_ticks(range(1, W+1, 5))
-        ax.xaxis.set_ticklabels(list(range(-((W-1)//2), W//2, 5)))
-        ax.yaxis.set_ticks(range(1, H+1, 5))
-        ax.yaxis.set_ticklabels(list(range(-((H-1)//2), H//2, 5)))
 
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
     fig.colorbar(plot,ax=ax)
-    plt.savefig("frequency_l1_diff.png", bbox_inches='tight')
+    # plt.savefig("frequency_l1_diff.png", bbox_inches='tight')
     plt.savefig("frequency_l1_diff.svg", bbox_inches='tight')
     plt.show()
+
+
+def imshow_all_subimg(input, adv, model, classes):
+    def set_axis_style(ax):
+        ax.xaxis.set_visible(False)
+        ax.yaxis.set_visible(False)
+    fig, ax = plt.subplots(dpi=300)
+    set_axis_style(ax)
+
+    if len(input.shape) == 3:
+        input = torch.view(1,*input.shape()).to('cpu')
+        adv = torch.view(1,*adv.shape()).to('cpu')
+
+    input = input.to('cpu')
+    adv = adv.to('cpu')
+    N, C, H, W = input.shape
+    _, f_ben_amps, f_ben_phase = toDFT(input)
+    _, f_adv_amps, f_adv_phase = toDFT(adv)
+
+    pert = ToValidImg(adv-input)
+
+
+    for i in range(len(input)):
+        class_id, _ = predict(model, torch.stack([input[i],adv[i]]))
+        ax.imshow(ToValidImg(input[i]).permute(1,2,0))
+        plt.savefig(f"img_{i}_{class_id[0]}.svg", bbox_inches='tight')
+        vizDFT(f_ben_amps[i].permute(1,2,0),f"img_{i}_freq","")
+        fig, ax = plt.subplots(dpi=300)
+        set_axis_style(ax)
+        ax.imshow(ToValidImg(adv[i]).permute(1,2,0))
+        plt.savefig(f"img_{i}_adv_{class_id[1]}.svg", bbox_inches='tight')
+        vizDFT(f_adv_amps[i].permute(1,2,0),f"img_{i}_adv_freq","")
+        fig, ax = plt.subplots(dpi=300)
+        set_axis_style(ax)
+        ax.imshow(pert[i].permute(1,2,0))
+        plt.savefig(f"img_{i}_pert.svg", bbox_inches='tight')
+        plt.show()
+
 
 def equal_samples(n_classes, dataloader, model, device):
     # creates list with n_samples-images from n_classes-classes

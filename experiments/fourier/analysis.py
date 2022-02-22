@@ -105,5 +105,5 @@ def vizDFT(
     axis.imshow(amps)
     axis.set_title(title if title != None else "Amplitude(dB)")
     if fname:
-        plt.savefig(f"{fname}.png")
+        plt.savefig(f"{fname}.svg", bbox_inches='tight')
     plt.show()

@@ -31,7 +31,6 @@ def train_trades(
     optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum = momentum,
                                  nesterov = True, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WideResmodel
     criterion = nn.CrossEntropyLoss().to(device)
     batch_size = trainloader.batch_size
     loss_p_epoch = []
@@ -40,17 +39,14 @@ def train_trades(
     for epoch in range(epochs):
         start_time = time.time()
         losses = 0
-        for i, batch in enumerate(trainloader):
+        for i, batch in enumerate(trainloader, 0):
             x = batch[0].to(device)
             y = batch[1].to(device)
 
             loss = trades_loss(model, optimizer, x, y, eps, alpha, norm, _lambda, iters)
             losses += float(loss)
-
             optimizer.step()
             optimizer.zero_grad()
-
-            del x, y
         epoch_time = time.time()-start_time
         print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
         (epoch, losses/(i+1), optimizer.param_groups[0]["lr"], epoch_time/60))
@@ -134,7 +130,6 @@ def trades_loss(
 
     pred = model(x)
     loss_nat = nn.CrossEntropyLoss()(pred, y)
-    # true_prob = nn.Softmax(dim=1)(pred)
 
     pred = model(adv_x)
     adv_prob = nn.LogSoftmax(dim=1)(pred)
