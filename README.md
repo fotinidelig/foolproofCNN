@@ -1,11 +1,12 @@
 ## foolproofNN
-A project for  investigating Adversarial Examples in NNs and their existence. 
+A project for  investigating Adversarial Examples in CNNs. 
 Implemented with PyTorch.
 
 Datasets:
 - [CIFAR-10](https://www.cs.toronto.edu/~kriz/cifar.html)
 - [MNIST](http://yann.lecun.com/exdb/mnist/)
 - [Tiny ImageNet](https://www.image-net.org/)
+- [350 Bird Species](https://www.kaggle.com/gpiosenka/100-bird-species/code?datasetId=534640&sortBy=voteCount)
 
 Models:
 - [Wide Residual Networks](https://arxiv.org/abs/1605.07146)
