@@ -113,17 +113,6 @@ def trades_loss(
         else:
             raise RuntimeError(f"Invalid norm was passed:{norm}, expected 2 or np.inf norm")
 
-    ## DEBUG:
-    # i = np.random.randint(x.shape[0]) # random image
-    # o = np.random.randint(100) # do 50% of epochs
-    # classes = [str(i) for i in range(10)]
-    # _l2 = torch.norm(adv_x[i] - x[i])
-    # if o < 50:
-    #     lab_atck = model.predict(adv_x[i])[0][0]
-    #     fname = 'trades_test'
-    #     show_image(i, (adv_x[i], lab_atck), (x[i], y[i]),
-    #              classes, fname="trades_adv", l2=_l2)
-
     set_requires_grad(model, True)
     model.train()
     optimizer.zero_grad()

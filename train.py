@@ -5,9 +5,9 @@ import argparse
 import numpy as np
 import time
 
-from experiments.models.utils import write_train_output, train, calc_accuracy
 from experiments.utils import load_wrap, load_model
 from experiments.parser import parser
+from experiments.models.utils import *
 
 import torch
 from torchvision.datasets import CIFAR10, MNIST
@@ -62,7 +62,7 @@ def main():
     classes = len(testset.classes)
     model, model_name = load_model(args.model, classes, args)
     model = model.to(device)
-    
+
     train_time = 0
     if args.pretrained:
         print("\n=> Using pretrained model.")
@@ -80,14 +80,14 @@ def main():
     ##############
 
     accuracy = calc_accuracy(model, testloader)
-    tSNE(model, args.model, trainloader, testset.classes)
 
     out_args = dict(LR=args.lr, LR_Decay=args.lr_decay, Runtime=train_time/60)
     if args.model == 'wideresnet':
         out_args['depth'] = args.depth
         out_args['width'] = args.width
 
-    ## only when filter is applied
+    ## Only when filter is applied
+    ## test accuracy on filtered test set
     if args.threshold:
         _, _, _, filtered_testloader = load_wrap(BATCH_SIZE, args.root, args.dataset, args.model,
                                                     args.augment, args.filter, threshold, filter_test=True,
@@ -105,8 +105,6 @@ def main():
         f.write(f"{threshold}, {accuracy}\n")
         f.close()
 
-    # accuracy_train = calc_accuracy(net, trainloader)
-    # out_args['accuracy_trainset'] = f'{accuracy_train*100}%'
     write_train_output(model, model_name, accuracy, **out_args)
 
 if __name__ == "__main__":

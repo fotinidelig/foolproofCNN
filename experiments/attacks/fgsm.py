@@ -37,6 +37,8 @@ def clip(x, eps, norm, proj=False):
     elif norm == 2:
         sq_norm = torch.maximum(torch.norm(x.view(N, -1), dim=1), zero_thres)
         clipped = N_mul(x, eps/sq_norm) if not proj else N_mul(x, torch.min(_one, eps/sq_norm))
+
+    torch.set_default_tensor_type(torch.FloatTensor) # un-use_gpu()
     return clipped
 
 def fgsm(
