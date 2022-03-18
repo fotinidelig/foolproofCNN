@@ -16,10 +16,6 @@ verbose = config.getboolean('general','verbose')
 attack_fname = config.get('general','attack_fname')
 
 
-use_gpu = lambda x=True: torch.set_default_tensor_type(torch.cuda.FloatTensor
-                                         if torch.cuda.is_available() and x
-                                         else torch.FloatTensor)
-
 def succeeded(model, adv_x, label, target=None):
     '''
         model: target model
@@ -37,6 +33,10 @@ def succeeded(model, adv_x, label, target=None):
     return success
 
 def write_attack_log(total_cnt, adv_cnt, dataset, model, **kwargs):
+    '''
+    Writes log to 'attack_fname' file.
+    Can be set in ../../config.ini.
+    '''
     success_rate = float(adv_cnt)/total_cnt
 
     f = open(attack_fname, 'a')
@@ -63,6 +63,10 @@ def img_pipeline(imgs):
 
 
 def save_images(images, path, fnames):
+    '''
+    Saves images as fnames in path.
+    Saved as .png.
+    '''
     if len(images.shape) != 4:
         images = [images]
     if not isinstance(fnames, list):
@@ -74,6 +78,11 @@ def save_images(images, path, fnames):
         save_image(image, path+fname+'.png')
 
 def show_image_function(classes, folder):
+    '''
+    Plots original with adversarial images.
+    Also plots perturbation if 'with_perturb=True'
+    Saved in 'folder' as sinlge .svg.
+    '''
     def show_image(idx, adv_img, img, l2=None, with_perturb=False):
         def set_axis_style(ax):
             ax.xaxis.set_visible(False)
@@ -109,27 +118,19 @@ def show_image_function(classes, folder):
 
         if not os.path.isdir(folder):
             os.makedirs(folder)
-        # plt.savefig(f"{folder}sample_{idx}_{classes[target]}.png", bbox_inches='tight')
         plt.savefig(f"{folder}sample_{idx}_{classes[target]}.svg", bbox_inches='tight')
         plt.show()
     return show_image
 
-def plot_l2(l2_list, iterations):
-    mean_l2 = [np.mean(l2_list)]*len(l2_list)
-    x = np.arange(len(l2_list))
-    plt.title("L2 distance from input")
-    plt.xlabel("Sample")
-    plt.ylabel("L2 distance")
-    plt.plot(x, l2_list, label='l2', marker='o')
-    plt.plot(x, mean_l2, label="mean", linestyle="--")
-    legend = plt.legend(loc='upper right')
-    plt.savefig(f"{datetime.now()}_l2_distance.png")
 
 def show_in_grid(adv_imgs, classes, fname='', **kwargs):
     '''
+        Plots adversarial images from/to true/target labels in grid.
+
         adv_imgs.shape = (N,M) or (C,C) for all classes to all classes
-        SO, adv_imgs[i] represents a row of M images in the subplot
-        Grid has NxM images
+        i.e. adv_imgs[i] represents a row of M images in the subplot
+        Grid has NxM images.
+        Saved in ./advimages/grid as .svg.
     '''
     def set_axis_style(ax):
         ax.xaxis.set_label_position('top')
@@ -167,13 +168,14 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
     path = f"advimages/grid"
     if not os.path.isdir(path):
         os.makedirs(path)
-    plt.savefig(f"{path}/{fname}.png", bbox_inches='tight')
     plt.savefig(f"{path}/{fname}.svg",bbox_inches='tight')
 
 
 def modified_frequencies(x_ben, x_adv, **kwargs):
     '''
-        Expects `x_ben`, `x_adv` in shape (<N,> C, H, W)
+        Expects `x_ben`, `x_adv` in shape (<N,> C, H, W).
+        Plots spectral l1-difference between each x_ben and x_adv image.
+        Saved as .svg
     '''
     device = x_adv.device
     if len(x_ben.shape) == 3:
@@ -194,17 +196,22 @@ def modified_frequencies(x_ben, x_adv, **kwargs):
 
     fig, ax = plt.subplots(1,1, dpi=300)
     # plot = ax.imshow(ToValidImg(20*np.log10(diff_per_freq.to('cpu'))), cmap='magma')
-
+    plot = ax.imshow(ToValidImg(diff_per_freq.to('cpu')), cmap='magma')
 
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
     fig.colorbar(plot,ax=ax)
-    # plt.savefig("frequency_l1_diff.png", bbox_inches='tight')
     plt.savefig("frequency_l1_diff.svg", bbox_inches='tight')
     plt.show()
 
 
 def imshow_all_subimg(input, adv, model, classes):
+    '''
+    Plots original(input) and adversarial images
+    as well as their spectrum and perturbation.
+    Saved as .svg
+    '''
+
     def set_axis_style(ax):
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
@@ -242,7 +249,9 @@ def imshow_all_subimg(input, adv, model, classes):
 
 
 def equal_samples(n_classes, dataloader, model, device):
-    # creates list with n_samples-images from n_classes-classes
+    '''
+    creates list with 'n_samples'-images from 'n_classes'-classes
+    '''
     counters = dict()
     n_samples = 50
     imgs = []
@@ -260,5 +269,5 @@ def equal_samples(n_classes, dataloader, model, device):
             if sum([counters[k] == n_samples for k in counters.keys()]) == n_classes:
                 break
     assert len(list(counters.keys())) == n_classes, "Not all classes are represented"
-    assert sum([counters[k] == n_samples for k in counters.keys()]) == n_classes, "Not all classes with n_samples"
+    assert sum([counters[k] == n_samples for k in counters.keys()]) == n_classes, f"Not all classes with {n_samples} samples"
     return imgs, labs

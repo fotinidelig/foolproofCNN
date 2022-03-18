@@ -6,6 +6,10 @@ import torch
 
 
 def HWC_to_CHW(image, inverse = False):
+    '''
+    Transpose single image from Hight-Width-Channels
+    to Channels-Hight-Width (or inverse)
+    '''
     if not inverse and torch.argmin(torch.tensor(image.size())) == 2:
         image = image.transpose(1,2).transpose(1,0)
     if inverse and torch.argmin(torch.tensor(image.size())) == 0:
@@ -14,6 +18,9 @@ def HWC_to_CHW(image, inverse = False):
 
 
 def xLP(amps, threshold):
+    '''
+    Low-Pass box filter
+    '''
     amps = HWC_to_CHW(amps)
     H = amps.shape[1]
     W = amps.shape[2]
@@ -33,6 +40,9 @@ def xLP(amps, threshold):
     return amps-filtered
 
 def xHP(amps, threshold):
+    '''
+    High-Pass box filter
+    '''
     amps = HWC_to_CHW(amps)
     H = amps.shape[1]
     W = amps.shape[2]
@@ -53,6 +63,10 @@ def xHP(amps, threshold):
     return filtered
 
 def xBP(amps, left, right):
+    '''
+    Band-Pass box filter
+    for both high- and low- pass filters
+    '''
     filteredH = xLP(amps, right)
     filtered = xHP(filteredH, left)
     return filtered

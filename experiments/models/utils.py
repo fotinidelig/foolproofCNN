@@ -2,14 +2,16 @@ import matplotlib.pyplot as plt
 import time
 from datetime import datetime
 import os
+import random
 import numpy as np
+from sklearn.manifold import TSNE
 import torch
 import torchvision
 import torch.nn.functional as F
 from torch.cuda.amp import autocast
 from torch import nn
 
-## READ CONFIGURATION PARAMETERS
+## READ CONFIGURATION PARAMETERS ##
 import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -17,6 +19,15 @@ verbose = config.getboolean('general','verbose')
 train_fname = config.get('general','train_fname')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+## ConvNet blocks ##
+
+class Identity(nn.Module):
+    def __init__(self):
+        super(Identity, self).__init__()
+
+    def forward(self, x):
+        return x
 
 class BasicConv2D(nn.Module):
     ## Conv + ReLU layers
@@ -96,6 +107,9 @@ class WideResBlock(nn.Module):
         out = self.blocks(x)
         return out
 
+####
+
+## Training and Inference functions ##
 
 def train(
     model,
@@ -119,6 +133,7 @@ def train(
     '''
     # turn on training mode, necessary for dropout/batch_norm layers
     model.train()
+    device = next(model.parameters()).device
 
     if not params_to_update:
         params_to_update = model.parameters()
@@ -200,7 +215,7 @@ def calc_accuracy(model, testloader):
 def validate_model(model, valloader, device):
     model.eval()
     loss = 0
-    for i, (samples, labels) in enumerate(valloader):
+    for i, (samples, labels) in enumerate(valloader, 0):
         out = model(samples.to(device).float())
         loss += nn.CrossEntropyLoss()(out, labels.to(device)).item()
     model.train()
@@ -219,18 +234,20 @@ def write_train_output(model, model_name, accuracy, **kwargs):
 
 def learning_curve(iters, losses, val_losses, epoch, lr, batch_size, filename):
     plt.rcParams["font.family"] = "serif"
-    plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
     plt.xlabel("Iterations")
     plt.ylabel("Loss")
-    plt.plot(iters, losses, label="train loss")
+    plt.grid()
+    plt.plot(iters, losses, label="train loss",color='#5B00AB')
     if val_losses != [] and val_losses:
-        plt.plot(iters, val_losses, label="val loss")
+        plt.plot(iters, val_losses, label="val loss",color='#3385FF')
         plt.legend()
     if not os.path.isdir('training_plots'):
         os.makedirs('training_plots')
-    plt.savefig(f"training_plots/{filename}.png")
+    plt.savefig(f"training_plots/{filename}.svg", bbox_inches='tight')
 
-## Debug-friendly-functions
+####
+
+## Debug-friendly-functions ##
 def print_named_weights_sum(model, p_name = None):
     for name, param in model.named_parameters():
         if  not p_name or p_name in name:
@@ -246,49 +263,61 @@ def debug_activations(model, layer):
         return hook
     model[layer].register_forward_hook(get_activation(layer))
 
+####
 
-def tSNE(model, model_class, dataloader, classes):
-    plt.rcParams["font.family"] = "serif"
-    plt.axis(False)
+## !UNDER CONSTRUCTION! ##
+
+def tSNE(model, model_class, dataloader, labels, classes):
+    '''
+    Run t-SNE on model's classification layer for given inputs.
+    This plots the distribution of the output for data from different classes,
+    and for different perplexity and iteration parameters.
+    Saved as .svg.
+    '''
     n_classes = len(classes)
-    # change model so that it doesn't use the fc classifier layers
-    if model_class == 'cwcifar10':
-        model.fc1 = Identity()
-        model.fc2 = Identity()
-        model.fc3 = Identity()
-        model.dropout = Identity()
-    else:
-        model.fc = Identity()
-
     model.eval()
-    feat_points = []
+    feat_points = [] ## store in CPU, else you get OUT OF MEMORY error
     index = 0
-    class_index = dict(zip(list(range(n_classes)),[[]]*n_classes))
-    for _, batch in enumerate(dataloader):
+    vals = [[] for i in range(n_classes)]
+    class_index = dict(zip(list(range(n_classes)),vals))
+    class_index[0].append(0)
+    for i, batch in enumerate(dataloader,0):
         x = batch[0].to(device)
         y = batch[1].to(device)
-        out = model(x)
-        feat_points += out
-        for j in range(len(batch[1])):
-            class_index[int(y[j])].append(j+index)
-        index += len(batch[1])
-
-    feat_points = torch.stack(feat_points)
-    perpl = [500,1000,2000]
-    iters = [100,500,1000,2000]
-
+        try:
+            out = model(x.float())
+            feat_points += out.to('cpu')
+            for j in range(len(y)):
+                class_index[int(y[j])].append(j+index)
+            index += len(batch[1])
+        except RuntimeError:
+            print("Error: ",len(x))
+            continue
+        del x, y
+    feat_points = torch.stack(feat_points).to(float).detach().numpy()
+    plot_labels = [f"class {i}" for i in range(n_classes)]
     colors = []
     for i in range(n_classes):
         colors.append("#"+''.join([random.choice('ABCDEF0123456789') for i in range(6)]))
+    plt.rcParams["font.family"] = "serif"
+    plt.axis(False)
 
     # grid search for best tSNE results
+    perpl = [800]
+    iters = [2000,3000,5000]
     for perplexity in perpl:
         for n_iter in iters:
             map_points = TSNE(n_components=2,perplexity=perplexity,
-                                learning_rate='auto',
+                                learning_rate=200.0,verbose=1,
                                 n_iter=n_iter).fit_transform(feat_points)
+            total += len(map_points)
             for i in range(n_classes):
                 plt.scatter(map_points[class_index[i]][0],
-                            map_points[class_index[i]][1],color=colors[i])
+                            map_points[class_index[i]][1],color=colors[i],
+                            label=plot_labels[i])
+            plt.legend(loc="upper left")
             plt.savefig(f"tsne_{perplexity}_{n_iter}.svg",bbox_inches='tight')
+            plt.show()
     return
+
+####

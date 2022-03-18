@@ -23,6 +23,9 @@ def gauss_kernel(thres_x, thres_y, H, W):
     return kernel
 
 def xLPG(amps, threshold):
+    '''
+    Low-Pass Gaussian filter
+    '''
     amps = HWC_to_CHW(amps)
     H = amps.shape[1]
     W = amps.shape[2]
@@ -35,6 +38,9 @@ def xLPG(amps, threshold):
     return filtered
 
 def xHPG(amps, threshold):
+    '''
+    High-Pass Gaussian filter
+    '''
     amps = HWC_to_CHW(amps)
     H = amps.shape[1]
     W = amps.shape[2]
@@ -48,6 +54,11 @@ def xHPG(amps, threshold):
     return filtered
 
 def xBPG(amps, left, right):
+    '''
+    Band-Pass filter
+    using high-pass Gaussian filter
+    and low-pass Gaussian filter
+    '''
     amps = HWC_to_CHW(amps)
     H = amps.shape[1]
     W = amps.shape[2]
@@ -72,6 +83,11 @@ def xBPG(amps, left, right):
     return filtered
 
 def xBP_smooth(amps, left, right):
+    '''
+    Band-Pass filter
+    using high-pass box filter
+    and low-pass Gaussian filter
+    '''
     filteredH = xLPG(amps, right)
     filtered = xHP(filteredH, left)
     return filtered

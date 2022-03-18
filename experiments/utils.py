@@ -11,17 +11,6 @@ from experiments.fourier.box_filtering import *
 from experiments.fourier.analysis import FourierFilter
 from experiments.models.models import CWCIFAR10, WideResNet, CWMNIST, resnet_model, effnet_model,googlenet_model
 
-def normalize(data: torch.tensor):
-    '''
-        Calculates mean and std of a dataset
-        for each channel, and returns
-        a normalization transformation.
-    '''
-    dims = (0,1,2) if len(data.shape) == 3 else 0
-    mean = data.float().mean(dims)
-    std =  data.float().std(dims)
-    return T.Normalize((*mean,), (*std,))
-
 def filtering(filter, threshold):
     if filter == 'low':
         filter = xLPG # one of xLPG, xLP
@@ -52,9 +41,8 @@ def load_data(
         Loads datasets from torchvision.datasets or custom
         datapath and converts
         image range from [0,1] to [-0.5,0.5].
-        A filter can be applied to the training or
-        validation set.
-        Also resizing is applied.
+        Filtering, Data Augmentation, Resizing applied if configured.
+        Validation set returned if configured.
     '''
 
     print("Loading dataset...")
@@ -126,6 +114,10 @@ def load_data(
 
 
 def load_wrap(batch_size, root, dataset, model, augment, filter, threshold, **kwargs):
+    '''
+    Wrapper for loading the dataset
+    according to runtime configurations.
+    '''
     if root:
         print(f"=> Loading dataset from path {root}")
         vals = load_data(None, root=root, batch_size=batch_size,
@@ -142,6 +134,10 @@ def load_wrap(batch_size, root, dataset, model, augment, filter, threshold, **kw
     return vals
 
 def load_model(model, classes, args):
+    '''
+    Wrapper for loading the model architecture
+    according to runtime configurations.
+    '''
     transfer_learn = True
     if 'transfer_learn' not in args and 'attack' not in args:
         transfer_learn = False
@@ -167,6 +163,8 @@ def load_model(model, classes, args):
     #         col_names=["output_size","kernel_size"])
     return model, model_name
 
+## Not frequenctly used ##
+
 def x_max_min(loader):
     '''
         Calculate max & min of dataset after
@@ -188,3 +186,17 @@ def x_max_min(loader):
 
     print(f"Max: {x_max} Min: {x_min}")
     return x_max, x_min
+
+
+def normalize(data: torch.tensor):
+    '''
+        Calculates mean and std of a dataset
+        for each channel, and returns
+        a normalization transformation.
+    '''
+    dims = (0,1,2) if len(data.shape) == 3 else 0
+    mean = data.float().mean(dims)
+    std =  data.float().std(dims)
+    return T.Normalize((*mean,), (*std,))
+
+####

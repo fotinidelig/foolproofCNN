@@ -34,6 +34,10 @@ class FourierFilter(object):
 
 
 def HWC_to_CHW(image, inverse = False):
+    '''
+    Transpose single image from Hight-Width-Channels 
+    to Channels-Hight-Width
+    '''
     if not inverse and torch.argmin(torch.tensor(image.size())) == 2:
         image = image.transpose(1,2).transpose(1,0)
     if inverse and torch.argmin(torch.tensor(image.size())) == 0:
@@ -92,6 +96,10 @@ def vizDFT(
     fname = None,
     title = None
 ):
+    '''
+        Plots 'amps' (i.e. image spectrum) in log-scale
+        Saved as .svg if 'fname!=None'.
+    '''
     def normalize(amplitudes):
         amplitudes = 20*np.log10(amplitudes)
         amplitudes = (amplitudes-amplitudes.min())/(amplitudes.max()-amplitudes.min())
