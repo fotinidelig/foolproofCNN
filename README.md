@@ -36,7 +36,7 @@ Implemented with PyTorch.
 
 `--dataset` and `root` are used to choose either a pre-existing `torch` dataset or to specify the root directory of the image data.
 
-**Training a model**
+**Training a model - train.py**
 
 At runtime you can train the model of your choice and add optional arguments.
 
@@ -54,7 +54,7 @@ usage: train.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
                 [--epochs EPOCHS] [--lr LR] [--lr-decay LR_DECAY]
 ```
 
-**Running an attack**
+**Running an attack - attack.py**
 
 Here you have various optional arguments for the target model or attack method.
 
@@ -72,7 +72,7 @@ usage: attack.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
                  [--batch BATCH] [--targeted] [--lr LR] [--epsilon EPSILON]
                  [--alpha ALPHA] [--iters ITERS] [--norm {2,inf}]
 ```
-**Training with TRADES**
+**Training with TRADES trades_train.py**
 
 Similar to normal training, with some additional parameters for the TRADES algorithm.
 As an example, try running `./trades_train.py --model cwcifar10 --dataset cifar10 --lambda 0.5 --norm 2 --iters 50 --alpha 0.009`
@@ -90,4 +90,28 @@ usage: trades_train.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
                        [--norm {inf,2}] [--epsilon EPSILON] [--alpha ALPHA]
                        [--iters ITERS]
 ```
+**Configuration files - config[.ini,.py]**
+
+Here you can set your global configuration parameters that are used within the project. These can be the log/ouptut file names, folders where you save results and any other parameters you might need.
+
+
+`config.py` is used to set these parameters in an easier way without directly accessing `config.ini`.
+
+```
+usage: config.py [-h] [-s SECTION] [--verbose {yes,no}] [-k KEY [KEY ...]]
+                 [-v VAL [VAL ...]]
+```
+
+`--verbose` controls what type of output you want when running train.py or attack.py - either descriptive (verbose) or simple.
+
+You can access these configuration parameters in a python module as follows:
+
+```
+import configparser
+config = configparser.ConfigParser()
+config.read('config.ini')
+bool_param_val = config.getboolean('general','bool_param_name')
+param_val = config.get('general','param_name')
+```
+
 ## Preliminary experimental results
