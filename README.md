@@ -9,6 +9,7 @@ Implemented with PyTorch.
 
 <!-- |Albatross||Tit mouse| -->
 
+
 ## About me
 
 **Datasets used:**
@@ -36,11 +37,14 @@ Implemented with PyTorch.
 
 `--dataset` and `root` are used to choose either a pre-existing `torch` dataset or to specify the root directory of the image data.
 
+
 **Training a model - train.py**
 
 At runtime you can train the model of your choice and add optional arguments.
 
-Simply run e.g. `./train.py --model cwcifar10 --dataset cifar10 --model_name Test-CIFAR-10`
+To start, simply run: 
+
+`./train.py --model cwcifar10 --dataset cifar10 --model_name Test-CIFAR-10`
 
 and to see the usage, run `./train.py --h`
 ```
@@ -54,11 +58,14 @@ usage: train.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
                 [--epochs EPOCHS] [--lr LR] [--lr-decay LR_DECAY]
 ```
 
+
 **Running an attack - attack.py**
 
 Here you have various optional arguments for the target model or attack method.
 
-For example, to run a PGD attack use `./attack.py --attack pgd --norm 2 --iters 40 --alpha 0.004 --epsilon 0.01 --samples 15 --model cwcifar10`
+For example, to run a PGD attack use: 
+
+`./attack.py --attack pgd --norm 2 --iters 40 --alpha 0.004 --epsilon 0.01 --samples 15 --model cwcifar10`
 
 and again see all parameters with `./attack.py --h`
 ```
@@ -72,10 +79,14 @@ usage: attack.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
                  [--batch BATCH] [--targeted] [--lr LR] [--epsilon EPSILON]
                  [--alpha ALPHA] [--iters ITERS] [--norm {2,inf}]
 ```
+
+
 **Training with TRADES trades_train.py**
 
 Similar to normal training, with some additional parameters for the TRADES algorithm.
-As an example, try running `./trades_train.py --model cwcifar10 --dataset cifar10 --lambda 0.5 --norm 2 --iters 50 --alpha 0.009`
+As an example, try running:
+
+`./trades_train.py --model cwcifar10 --dataset cifar10 --lambda 0.5 --norm 2 --iters 50 --alpha 0.009`
 
 ```
 usage: trades_train.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
