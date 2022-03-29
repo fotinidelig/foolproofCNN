@@ -12,26 +12,29 @@ Implemented with PyTorch.
 ## About me
 
 **Datasets used:**
-- [CIFAR-10](https://www.cs.toronto.edu/~kriz/cifar.html)
-- [MNIST](http://yann.lecun.com/exdb/mnist/)
-- [350 Bird Species](https://www.kaggle.com/gpiosenka/100-bird-species/code?datasetId=534640&sortBy=voteCount) (version 47)
+- [*CIFAR-10*](https://www.cs.toronto.edu/~kriz/cifar.html)
+- [*MNIST*](http://yann.lecun.com/exdb/mnist/)
+- [*350 Bird Species*](https://www.kaggle.com/gpiosenka/100-bird-species/code?datasetId=534640&sortBy=voteCount) (version 47)
 
 **Models implemented from scratch (use flag --model wideresnet):**
-- [Wide Residual Networks](https://arxiv.org/abs/1605.07146) (accuracy on CIFAR-10 approx. 82%)
+- [*Wide Residual Networks*](https://arxiv.org/abs/1605.07146) (accuracy on CIFAR-10 approx. 82%)
 
 **Attacks implemented from scratch:**
-- CW L2 Attack: [N. Carlini and D. Wagner, "Towards Evaluating the Robustness of Neural Networks" 2017 IEEE Symposium on Security and Privacy (SP), 2017, pp. 39-57, doi: 10.1109/SP.2017.49.](https://ieeexplore.ieee.org/document/7958570)
-- FGSM, PGD Attack: [I. Goodfellow, J. Shlens and C. Szegedy, "Explaining and Harnessing Adversarial Examples" 2015 International Conference on Learning Representations (ICLR), 2015.](https://arxiv.org/abs/1412.6572v3)
+- *CW L2 Attack*: [N. Carlini and D. Wagner, "Towards Evaluating the Robustness of Neural Networks" 2017 IEEE Symposium on Security and Privacy (SP), 2017, pp. 39-57, doi: 10.1109/SP.2017.49.](https://ieeexplore.ieee.org/document/7958570)
+- *FGSM and PGD Attacks*: [I. Goodfellow, J. Shlens and C. Szegedy, "Explaining and Harnessing Adversarial Examples" 2015 International Conference on Learning Representations (ICLR), 2015.](https://arxiv.org/abs/1412.6572v3)
 
 **Defences implemented from scratch:**
-- TRADES: [H. Zhang, Y. Yu, J. Jiao, E. P. Xing, L. El Ghaoui and M. I. Jordan, "Theoretically Principled Trade-off between Robustness and Accuracy" 2019 International Conference on Machine Learning, 2019.](https://arxiv.org/pdf/1901.08573.pdf)
+- *TRADES*: [H. Zhang, Y. Yu, J. Jiao, E. P. Xing, L. El Ghaoui and M. I. Jordan, "Theoretically Principled Trade-off between Robustness and Accuracy" 2019 International Conference on Machine Learning, 2019.](https://arxiv.org/pdf/1901.08573.pdf)
 
 ## How to use me
-Important: All attack methods and defences (and all consequent functions) can be used on their own as a tool, simply by importing the correct python modules.
+*Note*: All attack methods and defences (and all consequent functions) can be used on their own as a tool, simply by importing the correct python modules.
 
-In general, the argument `--model_name` specifies where to store or to load from a model.
-Also, `--model` sets the model architecture and might need some other parameters.
-Lastly, `--dataset` and `root` are used to choose either a pre-existing `torch` dataset or to specify the root directory of the image data.
+**General arguments:** 
+`--model_name` specifies where to store or to load from a model.
+
+`--model` sets the model architecture and might need some other parameters.
+
+`--dataset` and `root` are used to choose either a pre-existing `torch` dataset or to specify the root directory of the image data.
 
 **Training a model**
 
@@ -87,4 +90,4 @@ usage: trades_train.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
                        [--norm {inf,2}] [--epsilon EPSILON] [--alpha ALPHA]
                        [--iters ITERS]
 ```
-## My preliminary experimental results
+## Preliminary experimental results
