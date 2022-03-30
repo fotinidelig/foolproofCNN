@@ -1,9 +1,11 @@
+from PIL import Image
 from datetime import datetime
 import os
 import torch
 import numpy as np
 from .utils import *
 import time as tm
+from experiments.models.utils import predict
 
 '''
     *Disclaimer*
@@ -11,15 +13,25 @@ import time as tm
     - random initialization (in each binary step)
     - no early stopping
     - tanh rounding with noise to avoid NaN values
+    - predict() function from BasicModelClass which uses
+      model in inference mode (model.eval())
 '''
 
-def loss(const, conf, adv_sample, input, logits, targeted, target):
+def loss(
+        const,
+        conf,
+        adv_sample,
+        input,
+        logits,
+        targeted,
+        target
+    ):
     """
     Calculating the loss with f_6 objective function,
     refer to the paper for details
     """
     N = input.size(0)
-    max_ = torch.tensor([0]*N).to(input.device)
+    max_ = torch.tensor([0]*N)
     f_i = torch.stack([
     max([logits[i][j] for j in range(len(logits[0])) if j != target[i]]) for i in range(N)
     ])
@@ -31,7 +43,7 @@ def loss(const, conf, adv_sample, input, logits, targeted, target):
 
 
 def cwattack(
-        net,
+        model,
         x, # size (N,d...)
         targeted,
         target=None, # size (N,C)
@@ -41,7 +53,7 @@ def cwattack(
         conf=0,
         bin_steps=10,
         max_iterations=1000,
-        lr=0.005,
+        lr=0.01,
         x_min = -0.5,
         x_max = 0.5,
         random_init = True
@@ -74,8 +86,7 @@ def cwattack(
         return const_i, max_const_i, min_const_i, end_iters
 
     N = x.size(0)
-
-    device = x.device
+    use_gpu()
 
     adv_samples = []
     adv_targets = []
@@ -88,20 +99,20 @@ def cwattack(
     TO_ADD = .5*(x_max + x_min)
 
     if not targeted:
-        target, _ = net.predict(x)
+        target, _ = predict(model, x)
 
-    max_const_n = torch.tensor([max_const]*N).to(device).float()
-    min_const_n = torch.tensor([min_const]*N).to(device).float()
-    const_n = torch.tensor([init_const]*N).to(device).float()
+    max_const_n = torch.tensor([max_const]*N).float()
+    min_const_n = torch.tensor([min_const]*N).float()
+    const_n = torch.tensor([init_const]*N).float()
     w_n = torch.zeros_like(x).requires_grad_(True).float() # init
 
     found_atck_n = [False]*N
     best_atck_n = x.clone().detach()
-    best_l2_n = torch.full((N,), np.inf).to(device)
+    best_l2_n = torch.full((N,), np.inf)
     best_const_n = torch.zeros(N)
-    best_w_n = torch.zeros_like(x).to(device)
+    best_w_n = torch.zeros_like(x)
 
-    eps = torch.tensor(np.random.uniform(-0.02, 0.02, x.shape)).to(device) # random noise in range [-0.03, 0.03]
+    eps = torch.tensor(np.random.uniform(-0.02, 0.02, x.shape)) # random noise in range [-0.03, 0.03]
     input = (x+eps).clamp(min=x_min, max=x_max) # control for arctanh NaN values
     inv_input = torch.atanh((input-TO_ADD)/TO_MUL)
     w_n = (inv_input).clone().detach().requires_grad_(True)
@@ -109,11 +120,11 @@ def cwattack(
     for _ in range(bin_steps):
         params = [{'params': w_n}]
         optimizer = torch.optim.Adam(params, lr=lr)
-        cur_fx_n = torch.full((N,), np.inf).to(device)
+        cur_fx_n = torch.full((N,), np.inf)
         for i in range(max_iterations+1):
-            adv_sample_n = TO_MUL*torch.tanh(w_n)+TO_ADD
-            _, logits_n = net.predict(adv_sample_n, logits=True)
-            loss_n, fx_n = loss(const_n, conf, adv_sample_n, x, logits_n, targeted, target)
+            adv_n = TO_MUL*torch.tanh(w_n)+TO_ADD
+            _, logits_n = predict(model, adv_n, logits=True)
+            loss_n, fx_n = loss(const_n, conf, adv_n, x, logits_n, targeted, target)
 
             loss_n.sum().backward()
             optimizer.step()
@@ -126,19 +137,19 @@ def cwattack(
                     found_atck_n[i] = True
                     if i not in indices:
                         indices.append(i)
-                    l2_i = torch.norm(adv_sample_n[i] - x[i])
+                    l2_i = torch.norm(adv_n[i] - x[i])
                     if l2_i < best_l2_n[i]:
                         best_l2_n[i]  = l2_i
-                        best_atck_n[i] = adv_sample_n[i].detach().clone()
+                        best_atck_n[i] = adv_n[i].detach().clone()
                         best_const_n[i] = const_n[i].clone()
                         best_w_n[i] = w_n[i].clone().detach()
 
         # update parameters
         w_n = w_n.clone().detach()
         if random_init:
-            eps.data = torch.tensor(np.random.uniform(-0.02, 0.02, w_n.shape), device=device)
+            eps.data = torch.tensor(np.random.uniform(-0.02, 0.02, w_n.shape))
         else:
-            eps.data = torch.zeros_like(w_n, device=device)
+            eps.data = torch.zeros_like(w_n)
         for i in range(N):
             # update const
             vals = bin_search_const(const_n[i].item(), max_const_n[i].item(), min_const_n[i].item(), cur_fx_n[i])
@@ -150,64 +161,75 @@ def cwattack(
                 w_n[i] = inv_input[i]+eps[i]
         w_n = w_n.requires_grad_(True)
 
-    best_l2_n = torch.norm(best_atck_n - x, dim=list(range(len(x.shape))[2:])).norm(dim=1).tolist()
-    return best_atck_n, best_l2_n, best_const_n, indices
+    best_l2_n = torch.norm((best_atck_n-x).view(x.shape[0], -1), dim=1).tolist()
+    return best_atck_n, best_l2_n, best_const_n
 
 
 def cw_attack_all(
-        net,
+        model,
+        model_name,
         sampleloader,
         targeted,
+        dataset,
         classes,
-        dataname,
         save_attacks = False,
+        class_pairs = None,
         **kwargs
     ):
-    best_atck_all = []
-    l2_all = []
-    const_all = []
-    indices_all = []
-    cnt_adv = 0
-    cnt_all = 0
-    total_time = 0
+    use_gpu()
+    device = next(model.parameters()).device
+    folder = 'advimages/targeted/cw/' if targeted else 'advimages/untargeted/cw/'
+    show_image = show_image_function(classes, folder)
 
-    device = next(net.parameters()).device
+    best_atck = []
+    const_all = 0
+    successful = 0
+    distance = 0
+    cnt_all = 0
 
     for bidx, batch in enumerate(sampleloader):
         inputs = batch[0].to(device)
+        labels,_ = predict(model, inputs)
         targets = batch[1].to(device) if targeted else None
 
         start_time = tm.time()
-        vals = l2attack(net, inputs, targeted, targets, **kwargs)
+        vals = cwattack(model, inputs, targeted, targets, **kwargs)
         batch_time = tm.time()-start_time
-        total_time+=batch_time/60
 
-        best_atck = vals[0]
-        best_atck_all+=best_atck
-        l2_all += vals[1]
-        const_all += vals[2]
-        indices = vals[3]
-        cnt_adv += len(indices)
-        cnt_all += len(best_atck)
+        output = vals[0] # (N, C, H, W)
+        best_atck += output # (N, C, H, W) tensor == N x (C, H, W) list
+        cnt_all += len(output)
+        cnt = 0
+        for i in range(len(output)):
+            if succeeded(model, output[i], labels[i], targets[i] if targeted else None):
+                const_all += vals[2][i]
+                distance += vals[1][i]
+                cnt += 1
+                target = predict(model, output[i])[0][0]
+                unique_idx = int(i + cnt_all - len(output) + target) # index of image across all batches + attack label
+                show_image(unique_idx, (output[i], target), (inputs[i], labels[i]),
+                        l2=vals[1][i], with_perturb=True)
+                if class_pairs:
+                    # save true and target label pairs in dict
+                    class_pairs[str(int(labels[i]))][str(int(target))] += 1
 
         print("\n=> Attack took %f mins"%(batch_time/60))
-        print(f"Found attack for {len(indices)}/{len(best_atck)} samples.")
-        for i in indices:
-            label = net.predict(inputs[i])[0][0]
-            lab_atck = net.predict(best_atck[i])[0][0]
-            fname = 'targeted' if targeted else 'untargeted/' + "cwl2/" + dataname
-            unique_idx = int(i + cnt_all - len(best_atck) + lab_atck) # index of image across all batches + attack label
-            show_image(unique_idx, (best_atck[i], lab_atck), (inputs[i], label),
-                         classes, fname=fname, l2=vals[1][i])
-            if save_attacks:
-                save_images(best_atck[i], f'saved/target_{lab_atck}/', str(unique_idx))
-                save_images(best_atck[i], f'saved/orig_{label}/', str(unique_idx))
-
-    # DEBUG:
+        print(f"Found attack for {cnt}/{len(output)} samples.")
+        successful += cnt
+    # Logs
     lr = kwargs['lr'] if 'lr' in kwargs.keys() else 0.01
     iterations = kwargs['max_iterations'] if 'max_iterations' in kwargs.keys() else 1000
-    kwargs = dict(lr=lr,iterations=iterations)
+    mean_const = const_all/successful
+    mean_distance = distance/successful
+    kwargs = dict(lr=lr, iterations=iterations)
+    kwargs['mean_const'] = mean_const
+    kwargs['mean_distance'] = mean_distance
+    kwargs['Attack'] = 'C&W'
+    kwargs['total_cnt'] = len(best_atck)
+    kwargs['adv_cnt'] = successful
+    kwargs['dataset'] = dataset
+    kwargs['model'] = model_name
+    write_attack_log(**kwargs)
 
-    write_attack_output(cnt_all, cnt_adv, const_all, l2_all,
-                dataname, net.__class__.__name__, time=total_time, **kwargs)
-    return best_atck_all
+    best_atck = torch.stack(best_atck, dim=0).detach()
+    return best_atck

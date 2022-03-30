@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from typing import Optional
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet34, resnet50, resnet101, efficientnet_b0, googlenet
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -139,21 +139,51 @@ class WideResNet(BasicModel):
         out = self.group3(out)
         out = self.group4(out)
         out = F.relu(self.bn1(out), inplace=True)
-        out = F.avg_pool2d(out, out.shape[2])
-        N, C, W, H = (*(out.shape),)
-        out = out.view(-1, C*W*H)
+        out = F.avg_pool2d(out, 8)
+        out = out.view(out.size(0), -1)
         logits = self.fc(out)
 
         # Don't use softmax layer since it is incorporated in torch.nn.CrossEntropyLoss()
         return logits
 
-## Load ResNet for Tiny ImageNet
-def tiny_imagenet_model(pretrained):
-    model = resnet18(pretrained=pretrained)
-    for param in model.parameters():
-        param.requires_grad = False
-    model.fc = nn.Linear(512, 200)
-    print(model)
+## Load ResNet-[18,34,50,101]
+def resnet_model(layers=18, classes=200, pretrained=True, grads=True):
+    if layers == 18:
+        resnet = resnet18
+    elif layers == 34:
+        resnet = resnet34
+    elif layers == 50:
+        resnet = resnet50
+    elif layers == 101:
+        resnet = resnet101
+    model = resnet(pretrained=pretrained)
+    if pretrained and not grads:
+        for param in model.parameters():
+            param.requires_grad = False
+    model.fc = nn.Linear(512, out_features=classes, bias=True)
+    if verbose:
+        print("\n", model)
+    return model
+
+def effnet_model(classes=200, pretrained=True, grads=True):
+    model = efficientnet_b0(pretrained=pretrained)
+    if pretrained and not grads:
+        for param in model.parameters():
+            param.requires_grad = False
+    model.classifier = nn.Sequential(nn.Dropout(0.2,inplace=True),
+                                     nn.Linear(1280, classes, bias=True))
+    if verbose:
+        print("\n", model)
+    return model
+
+def googlenet_model(classes=200, pretrained=True, grads=True):
+    model = googlenet(pretrained=pretrained)
+    if pretrained and not grads:
+        for param in model.parameters():
+            param.requires_grad = False
+    model.fc = nn.Linear(1024, out_features=classes, bias=True)
+    if verbose:
+        print("\n", model)
     return model
 
 def finetune_params(model):

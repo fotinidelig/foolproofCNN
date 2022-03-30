@@ -1,64 +1,76 @@
 import time
 import numpy as np
 import torch
+import os
 from torch import nn
-from experiments.models.utils import learning_curve
+from experiments.models.utils import learning_curve, validate_model
 from experiments.attacks.fgsm import clip
-from experiments.attacks.utils import show_image
+
 
 def train_trades(
-        net,
-        _lambda,
-        norm,
-        trainloader,
-        lr = .01,
-        lr_decay = 1, # set to 1 for no effect
-        epochs = 40,
-        momentum = .9,
-        weight_decay = 5e-4,
-        **kwargs
+    model,
+    _lambda,
+    trainloader,
+    valloader = None,
+    norm = np.inf,
+    lr = .01,
+    lr_decay = 1, # set to 1 for no effect
+    epochs = 40,
+    momentum = .9,
+    weight_decay = 5e-4,
+    model_name = None,
+    eps = 0.031,
+    alpha = 0.007,
+    iters = 30,
+    **kwargs
     ):
 
-    # PGD paramters
-    eps = 0.031
-    alpha = 0.007
-    iters = 40
+    model.train()
+    device = next(model.parameters()).device
 
-    net.train()
-    device = next(net.parameters()).device
-
-    optimizer = torch.optim.SGD(net.parameters(), lr = lr, momentum = momentum,
+    optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum = momentum,
                                  nesterov = True, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WideResNet
     criterion = nn.CrossEntropyLoss().to(device)
     batch_size = trainloader.batch_size
     loss_p_epoch = []
+    val_loss_p_epoch = []
 
     for epoch in range(epochs):
         start_time = time.time()
-        for bidx, batch in enumerate(trainloader):
+        losses = 0
+        for i, batch in enumerate(trainloader, 0):
             x = batch[0].to(device)
             y = batch[1].to(device)
 
-            loss = trades_loss(net, optimizer, x, y, eps, alpha, norm, _lambda, iters)
-            # loss.backward()
-
+            loss = trades_loss(model, optimizer, x, y, eps, alpha, norm, _lambda, iters)
+            losses += float(loss)
             optimizer.step()
             optimizer.zero_grad()
-        scheduler.step()
-        loss_p_epoch.append(float(loss.item()))
         epoch_time = time.time()-start_time
-        cur_lr = optimizer.param_groups[0]["lr"]
         print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
-                (epoch, loss.item(), cur_lr, epoch_time/60))
-    if kwargs['filename']:
-        learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['filename'])
-    torch.save(net.state_dict(), f"pretrained/TRADES_{net.__class__.__name__}.pt")
+        (epoch, losses/(i+1), optimizer.param_groups[0]["lr"], epoch_time/60))
+
+        if valloader:
+            val_loss = validate_model(model, valloader, device)
+            val_loss_p_epoch.append(val_loss)
+            print("=> [EPOCH %d] VAL LOSS = %.4f"%(epoch, val_loss))
+
+
+        loss_p_epoch.append(losses/(i+1))
+
+        scheduler.step()
+
+    if 'l_curve_name' in kwargs.keys():
+        learning_curve(np.arange(epochs), loss_p_epoch, val_loss_p_epoch, "all", lr, batch_size, kwargs['l_curve_name'])
+    if not os.path.isdir('models'):
+        os.makedirs('models')
+    model_name = model.__class__.__name__ if not model_name else model_name
+    torch.save(model.state_dict(), f"pretrained/{model_name}.pt")
 
 
 def trades_loss(
-    net,
+    model,
     optimizer,
     x,
     y,
@@ -79,12 +91,12 @@ def trades_loss(
     adv_x = adv_x + rand
     adv_x = torch.clamp(adv_x, x_min, x_max).to(device)
 
-    net.eval()
-    set_requires_grad(net, False)
-    true_prob = nn.Softmax(dim=1)(net(x))
+    model.eval()
+    set_requires_grad(model, False)
+    true_prob = nn.Softmax(dim=1)(model(x))
     for _ in range(iters):
         adv_x = adv_x.clone().detach().requires_grad_(True)
-        pred = net.forward(adv_x)
+        pred = model.forward(adv_x)
         adv_prob = nn.LogSoftmax(dim=1)(pred) # log softmax for predictionts, softmax for ground-truth
         loss = nn.KLDivLoss()(adv_prob, true_prob)
         loss.backward()
@@ -101,33 +113,19 @@ def trades_loss(
         else:
             raise RuntimeError(f"Invalid norm was passed:{norm}, expected 2 or np.inf norm")
 
-    ## DEBUG:
-    # i = np.random.randint(x.shape[0]) # random image
-    # o = np.random.randint(100) # do 50% of epochs
-    # classes = [str(i) for i in range(10)]
-    # _l2 = torch.norm(adv_x[i] - x[i])
-    # if o < 50:
-    #     lab_atck = net.predict(adv_x[i])[0][0]
-    #     fname = 'trades_test'
-    #     show_image(i, (adv_x[i], lab_atck), (x[i], y[i]),
-    #              classes, fname="trades_adv", l2=_l2)
-
-    set_requires_grad(net, True)
-    net.train()
+    set_requires_grad(model, True)
+    model.train()
     optimizer.zero_grad()
 
-    pred = net(x)
-    loss_nat = nn.CrossEntropyLoss()(pred, y).mean()
-    true_prob = nn.Softmax(dim=1)(pred)
+    pred = model(x)
+    loss_nat = nn.CrossEntropyLoss()(pred, y)
 
-    pred = net(adv_x)
+    pred = model(adv_x)
     adv_prob = nn.LogSoftmax(dim=1)(pred)
     loss_rob = nn.KLDivLoss()(adv_prob, true_prob).mean()
     loss = loss_nat + loss_rob/_lambda
-
     loss.backward()
-
-    return loss
+    return loss.item()
 
 # from https://github.com/pytorch/pytorch/issues/2655#issuecomment-333501083
 def set_requires_grad(module, val):

@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 
-## Imports
+
+import argparse
 import numpy as np
 import time
-import os
 
-# import experiments
-from experiments.models.utils import write_train_output, calc_accuracy
-from experiments.defences.trades import train_trades
 from experiments.utils import load_wrap, load_model
 from experiments.parser import parser
+from experiments.models.utils import *
 
 import torch
 from torchvision.datasets import CIFAR10, MNIST
 from torch.utils.data import Dataset, DataLoader, TensorDataset
+
+## READ CONFIGURATION PARAMETERS
+import configparser
+config = configparser.ConfigParser()
+config.read('config.ini')
+low_fname = config.get('general','accuracy_low')
+high_fname = config.get('general','accuracy_high')
+band_fname = config.get('general','accuracy_band')
 
 
 def main():
@@ -21,8 +27,7 @@ def main():
     ## PARSER ##
     ############
 
-    args = parser(advtrain=True, attack=False)
-    norm = 2 if args.norm == '2' else np.inf
+    args = parser(train=True, attack=False)
     threshold = (*[int(val) for val in args.threshold.split(',')],) if args.threshold else None
     input_size = (*[int(val) for val in args.input_size.split(',')],)
     output_size = (*[int(val) for val in args.output_size.split(',')],) if args.output_size else None
@@ -57,7 +62,7 @@ def main():
     classes = len(testset.classes)
     model, model_name = load_model(args.model, classes, args)
     model = model.to(device)
-    
+
     train_time = 0
     if args.pretrained:
         print("\n=> Using pretrained model.")
@@ -65,14 +70,41 @@ def main():
     else:
         print("\n=> Training...")
         start_time = time.time()
-        train_trades(model, args._lambda, trainloader, validloader, norm, lr=args.lr, lr_decay=args.lr_decay,
-                    eps = args.epsilon, alpha = args.alpha, iters = args.iters, epochs=args.epochs,
-                    model_name=model_name, l_curve_name=model_name)
+        train(model, trainloader, validloader, epochs=args.epochs, lr=args.lr, lr_decay=args.lr_decay,
+                 model_name=model_name, l_curve_name=model_name)
         train_time = time.time() - start_time
         print("\n=> [TOTAL TRAINING] %.4f mins."%(train_time/60))
 
+    ##############
+    ## Evaluate ##
+    ##############
+
     accuracy = calc_accuracy(model, testloader)
-    out_args = dict(LR=args.lr, Lambda=args._lambda, Runtime=train_time/60)
+
+    out_args = dict(LR=args.lr, LR_Decay=args.lr_decay, Runtime=train_time/60)
+    if args.model == 'wideresnet':
+        out_args['depth'] = args.depth
+        out_args['width'] = args.width
+
+    ## Only when filter is applied
+    ## test accuracy on filtered test set
+    if args.threshold:
+        _, _, _, filtered_testloader = load_wrap(BATCH_SIZE, args.root, args.dataset, args.model,
+                                                    args.augment, args.filter, threshold, filter_test=True,
+                                                    input_size=input_size, output_size=output_size)
+
+        accuracy_filtered = calc_accuracy(model, filtered_testloader)
+        out_args['filter'] = f"{args.filter}, threshold: {threshold}"
+        out_args['accuracy_filtered_dataset'] = f'{accuracy_filtered*100}%'
+        if args.filter == 'low':
+            f = open(low_fname, 'a+')
+        elif args.filter == 'high':
+            f = open(high_fname, 'a+')
+        else:
+            f = open(band_fname, 'a+')
+        f.write(f"{threshold}, {accuracy}\n")
+        f.close()
+
     write_train_output(model, model_name, accuracy, **out_args)
 
 if __name__ == "__main__":

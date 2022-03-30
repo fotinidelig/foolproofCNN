@@ -2,14 +2,16 @@ import matplotlib.pyplot as plt
 import time
 from datetime import datetime
 import os
+import random
 import numpy as np
+from sklearn.manifold import TSNE
 import torch
 import torchvision
 import torch.nn.functional as F
+from torch.cuda.amp import autocast
 from torch import nn
 
-## READ CONFIGURATION PARAMETERS
-# from config import config_params
+## READ CONFIGURATION PARAMETERS ##
 import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -17,6 +19,15 @@ verbose = config.getboolean('general','verbose')
 train_fname = config.get('general','train_fname')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+## ConvNet blocks ##
+
+class Identity(nn.Module):
+    def __init__(self):
+        super(Identity, self).__init__()
+
+    def forward(self, x):
+        return x
 
 class BasicConv2D(nn.Module):
     ## Conv + ReLU layers
@@ -42,6 +53,13 @@ class BasicLinear(nn.Module):
         out = self.relu(out)
         return out
 
+class BasicModel(nn.Module):
+    def __init__(self):
+        super(BasicModel, self).__init__()
+
+    def forward(self, x):
+        raise NotImplementedError
+
 class BasicResBlock(nn.Module):
     ## BN -> RELU -> CONV (x2)
     def __init__(self, i_channels, o_channels, kernel_size, stride = 1):
@@ -55,9 +73,11 @@ class BasicResBlock(nn.Module):
         bn2 = nn.BatchNorm2d(o_channels)
         relu2 = nn.ReLU(inplace=True)
         conv2 = nn.Conv2d(o_channels, o_channels, kernel_size=kernel_size, padding=1, stride=1)
-        self.seqRes = nn.Sequential(bn1, relu1, conv1, bn2, relu2, conv2)
+        self.convLayers = nn.Sequential(bn1, relu1, conv1, bn2, relu2, conv2)
+
         self.id_conv = nn.Conv2d(i_channels, o_channels, 1, stride=stride)
         self.id_bn = nn.BatchNorm2d(i_channels)
+        self.resLayers = nn.Sequential(self.id_bn, nn.ReLU(inplace=True), self.id_conv)
         # Initialization as found in vision::torchvision::models::resnet.py
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -69,8 +89,8 @@ class BasicResBlock(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x):
-        out = self.seqRes(x)
-        out += x if self.sameInOut else self.id_conv(F.relu(self.id_bn(x)))
+        out = self.convLayers(x)
+        out += x if self.sameInOut else self.resLayers(x)
         return out
 
 class WideResBlock(nn.Module):
@@ -87,32 +107,14 @@ class WideResBlock(nn.Module):
         out = self.blocks(x)
         return out
 
+####
 
-class BasicModel(nn.Module):
-    def __init__(self):
-        super(BasicModel, self).__init__()
-
-    def forward(self, x):
-        raise NotImplementedError
-
-
-    def predict(self, samples, logits = False):
-        # check if x batch of samples or sample
-        if len(samples.size()) < 4:
-            samples = torch.reshape(samples, (1, *samples.size()))
-
-        self.eval()
-        logs = self.forward(samples.float())
-        if logits:
-            return torch.argmax(logs, 1), logs
-        softmax = torch.nn.Softmax(dim=1)
-        probs = softmax(logs)
-        return torch.argmax(probs, 1), probs
-
+## Training and Inference functions ##
 
 def train(
     model,
     trainloader,
+    valloader=None,
     lr = .01,
     lr_decay = 1, # set to 1 for no effect
     epochs = 40,
@@ -122,8 +124,16 @@ def train(
     model_name = None,
     **kwargs
 ):
+    '''
+        Optimizations used in training:
+        *automatic mixed precision (amp) of model weights
+        *cuDNN autotuner for convolution computations
+        *num_workers>0 and pin_memory=True in DataLoaders
+        *param.grad=None instead of optimizer.zero_grad()
+    '''
     # turn on training mode, necessary for dropout/batch_norm layers
     model.train()
+    device = next(model.parameters()).device
 
     if not params_to_update:
         params_to_update = model.parameters()
@@ -131,15 +141,15 @@ def train(
     optimizer = torch.optim.SGD(params_to_update, lr = lr, momentum = momentum,
                                  nesterov = True, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = lr_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, len(trainloader)*epochs) # for WideResNet
     criterion = nn.CrossEntropyLoss().to(device)
     batch_size = trainloader.batch_size
     loss_p_epoch = []
+    val_loss_p_epoch = []
     total_inputs = 0
 
     for epoch in range(epochs):
         iters = []
-        losses = []
+        losses = 0
         start_time = time.time()
         for i, batch in enumerate(trainloader, 0):
             total_inputs += batch[0].size(0)
@@ -149,28 +159,41 @@ def train(
             loss = criterion(pred, targets)
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad()
+            for param in model.parameters():
+                param.grad = None
             iters.append(i)
-            losses.append(float(loss.item())*batch_size)
+            losses += float(loss.item())
 
-        # if epoch%5 == 0:
-        cur_lr = optimizer.param_groups[0]["lr"]
-        scheduler.step()
-
-        loss_p_epoch.append(sum(losses)/total_inputs)
         epoch_time = time.time()-start_time
+        loss_p_epoch.append(losses/(i+1))
         if verbose:
             print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
-                    (epoch, loss_p_epoch[-1], cur_lr, epoch_time/60))
-        # if epoch%5 == 0:
-        #     learning_curve(iters, losses, epoch, cur_lr)
+            (epoch, loss_p_epoch[-1], optimizer.param_groups[0]["lr"], epoch_time/60))
+        if valloader:
+            val_loss = validate_model(model, valloader, device)
+            val_loss_p_epoch.append(val_loss)
+            print("=> [EPOCH %d] VAL LOSS = %.4f"%(epoch, val_loss))
+        scheduler.step()
+
     if 'l_curve_name' in kwargs.keys():
-        learning_curve(np.arange(epochs), loss_p_epoch, "all", lr, batch_size, kwargs['l_curve_name'])
+        learning_curve(np.arange(epochs), loss_p_epoch, val_loss_p_epoch, "all", lr, batch_size, kwargs['l_curve_name'])
     if not os.path.isdir('models'):
         os.makedirs('models')
     model_name = model.__class__.__name__ if not model_name else model_name
     torch.save(model.state_dict(), f"pretrained/{model_name}.pt")
 
+
+def predict(model, samples, logits = False):
+    model.eval()
+    # check if x batch of samples or sample
+    if len(samples.size()) < 4:
+        samples = torch.reshape(samples, (1, *samples.size()))
+
+    logs = model(samples.float())
+    if logits:
+        return torch.argmax(logs, 1), logs
+    probs = torch.nn.Softmax(dim=1)(logs)
+    return torch.argmax(probs, 1), probs
 
 def calc_accuracy(model, testloader):
     with torch.no_grad():
@@ -182,22 +205,21 @@ def calc_accuracy(model, testloader):
             total += samples.size(0)
             samples = samples.to(device)
             targets = targets.to(device)
-            out=model(samples)
-            labels = torch.argmax(out, dim=1)
-
-            wrong_l=[]
-            wrong_t=[]
-            for j in range(len(samples)):
-                if int(labels[j])!=int(targets[j]):
-                    wrong_l.append(labels[j].item())
-                    wrong_t.append(targets[j].item())
-            print(wrong_l)
-            print(wrong_t)
+            labels = predict(model, samples)[0]
 
             accuracy += sum([int(labels[j])==int(targets[j]) for j in range(len(samples))])
 
     accuracy = float(accuracy/total)
     return accuracy
+
+def validate_model(model, valloader, device):
+    model.eval()
+    loss = 0
+    for i, (samples, labels) in enumerate(valloader, 0):
+        out = model(samples.to(device).float())
+        loss += nn.CrossEntropyLoss()(out, labels.to(device)).item()
+    model.train()
+    return loss/(i+1)
 
 def write_train_output(model, model_name, accuracy, **kwargs):
     f = open(train_fname, 'a')
@@ -210,16 +232,22 @@ def write_train_output(model, model_name, accuracy, **kwargs):
     print("Test accuracy: %.2f"%(accuracy*100),"%", **outputf)
     print("=><=", **outputf)
 
-def learning_curve(iters, losses, epoch, lr, batch_size, filename):
-    plt.clf()
+def learning_curve(iters, losses, val_losses, epoch, lr, batch_size, filename):
     plt.rcParams["font.family"] = "serif"
-    plt.title("Training Curve (batch_size={}, lr={}), epoch={}".format(batch_size, lr, epoch))
     plt.xlabel("Iterations")
     plt.ylabel("Loss")
-    plt.plot(iters, losses)
-    plt.savefig(f"training_plots/learning_curve_{filename}.png")
+    plt.grid()
+    plt.plot(iters, losses, label="train loss",color='#5B00AB')
+    if val_losses != [] and val_losses:
+        plt.plot(iters, val_losses, label="val loss",color='#3385FF')
+        plt.legend()
+    if not os.path.isdir('training_plots'):
+        os.makedirs('training_plots')
+    plt.savefig(f"training_plots/{filename}.svg", bbox_inches='tight')
 
-## Debug-friendly-functions
+####
+
+## Debug-friendly-functions ##
 def print_named_weights_sum(model, p_name = None):
     for name, param in model.named_parameters():
         if  not p_name or p_name in name:
@@ -234,3 +262,62 @@ def debug_activations(model, layer):
             activation[name] = output.detach()
         return hook
     model[layer].register_forward_hook(get_activation(layer))
+
+####
+
+## !UNDER CONSTRUCTION! ##
+
+def tSNE(model, model_class, dataloader, labels, classes):
+    '''
+    Run t-SNE on model's classification layer for given inputs.
+    This plots the distribution of the output for data from different classes,
+    and for different perplexity and iteration parameters.
+    Saved as .svg.
+    '''
+    n_classes = len(classes)
+    model.eval()
+    feat_points = [] ## store in CPU, else you get OUT OF MEMORY error
+    index = 0
+    vals = [[] for i in range(n_classes)]
+    class_index = dict(zip(list(range(n_classes)),vals))
+    class_index[0].append(0)
+    for i, batch in enumerate(dataloader,0):
+        x = batch[0].to(device)
+        y = batch[1].to(device)
+        try:
+            out = model(x.float())
+            feat_points += out.to('cpu')
+            for j in range(len(y)):
+                class_index[int(y[j])].append(j+index)
+            index += len(batch[1])
+        except RuntimeError:
+            print("Error: ",len(x))
+            continue
+        del x, y
+    feat_points = torch.stack(feat_points).to(float).detach().numpy()
+    plot_labels = [f"class {i}" for i in range(n_classes)]
+    colors = []
+    for i in range(n_classes):
+        colors.append("#"+''.join([random.choice('ABCDEF0123456789') for i in range(6)]))
+    plt.rcParams["font.family"] = "serif"
+    plt.axis(False)
+
+    # grid search for best tSNE results
+    perpl = [800]
+    iters = [2000,3000,5000]
+    for perplexity in perpl:
+        for n_iter in iters:
+            map_points = TSNE(n_components=2,perplexity=perplexity,
+                                learning_rate=200.0,verbose=1,
+                                n_iter=n_iter).fit_transform(feat_points)
+            total += len(map_points)
+            for i in range(n_classes):
+                plt.scatter(map_points[class_index[i]][0],
+                            map_points[class_index[i]][1],color=colors[i],
+                            label=plot_labels[i])
+            plt.legend(loc="upper left")
+            plt.savefig(f"tsne_{perplexity}_{n_iter}.svg",bbox_inches='tight')
+            plt.show()
+    return
+
+####

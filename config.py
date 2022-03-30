@@ -38,22 +38,17 @@ def main():
     parser = argparse.ArgumentParser(description='Set configuration parameters of config.ini via CL.')
     parser.add_argument('-s', '--section', type=str,
                          help='section of config.ini in which to add parameter')
-    parser.add_argument('-v', '--verbose', type=str, choices=['yes','no'], help='set verbose')
-    parser.add_argument('--train', type=str, help='set train_fname')
-    parser.add_argument('--attack', type=str, help='set attack_fname')
-    parser.add_argument('--other', type=str, help='set other parameter')
+    parser.add_argument('--verbose', type=str, choices=['yes','no'], help='set verbose')
+    parser.add_argument('-k', '--key', nargs='+', type=str, help='define key of config.ini')
+    parser.add_argument('-v', '--val', nargs='+', type=str, help='define val of key')
     args = parser.parse_args()
 
     kwargs = dict()
     if args.verbose:
-        kwargs['verbose']=args.verbose
-    if args.train:
-        kwargs['train']=args.train
-    if args.attack:
-        kwargs['attack']=args.attack
-    if args.other:
-        kwargs['other']=args.other
-
+        kwargs['verbose'] = args.verbose
+    if args.key and args.val:
+        for key, val in zip(args.key, args.val):
+            kwargs[key] = val
     write_config(args.section, **kwargs)
 
 if __name__ == "__main__":

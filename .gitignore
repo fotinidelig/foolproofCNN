@@ -1,9 +1,10 @@
 __pycache__/
 data/
-training_plots/
 advimages/
-datasets/
-
-train.out
-attack.out
+pretrained/
+miscellaneous/
+diffs/
 config.ini
+*.ipynb
+*.out
+*.png
