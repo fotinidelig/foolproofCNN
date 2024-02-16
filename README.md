@@ -9,6 +9,7 @@ Implemented with PyTorch.
 
 <!-- |Albatross||Tit mouse| -->
 
+Check out the **tutorial.ipynb** notebook to get a glimse of what adversarial attacks do. =)
 
 ## About this repo
 
