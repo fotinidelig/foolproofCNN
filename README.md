@@ -9,7 +9,7 @@ Implemented with PyTorch.
 
 <!-- |Albatross||Tit mouse| -->
 
-Check out the **tutorial.ipynb** notebook to get a glimse of what adversarial attacks do. =)
+Check out the **[tutorial.ipynb](https://github.com/fotinidelig/foolproofCNN/blob/main/tutorial.ipynb)** notebook to get a glimse of what adversarial attacks do. =)
 
 ## About this repo
 
@@ -125,3 +125,17 @@ config.read('config.ini')
 bool_param_val = config.getboolean('general','bool_param_name')
 param_val = config.get('general','param_name')
 ```
+
+### Citation
+NTUA official thesis archive: http://artemis.cslab.ece.ntua.gr:8080/jspui/handle/123456789/18263
+
+@masterthesis{mythesis,
+    title        = {Vulnerabilities and robustness of Convolutional Neural Networks against Adversarial Attacks in the spatial and spectral domain},
+    author       = {Fotini Deligiannaki},
+    year         = 2022,
+    month        = {February},
+    address      = {Athens, GR},
+    note         = {Available at \url{http://artemis.cslab.ece.ntua.gr:8080/jspui/handle/123456789/18263}},
+    school       = {National Technical University of Athens},
+    type         = {Diploma MEng. Thesis}
+}
