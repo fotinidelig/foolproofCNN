@@ -128,9 +128,10 @@ param_val = config.get('general','param_name')
 
 ### Citation
 NTUA official thesis archive: http://artemis.cslab.ece.ntua.gr:8080/jspui/handle/123456789/18263
-
+```
 @masterthesis{mythesis,
-    title        = {Vulnerabilities and robustness of Convolutional Neural Networks against Adversarial Attacks in the spatial and spectral domain},
+    title        = {Vulnerabilities and robustness of Convolutional Neural Networks against
+                    Adversarial Attacks in the spatial and spectral domain},
     author       = {Fotini Deligiannaki},
     year         = 2022,
     month        = {February},
@@ -139,3 +140,4 @@ NTUA official thesis archive: http://artemis.cslab.ece.ntua.gr:8080/jspui/handle
     school       = {National Technical University of Athens},
     type         = {Diploma MEng. Thesis}
 }
+```
