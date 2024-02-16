@@ -6,8 +6,8 @@ def parser(train=True, advtrain=False, attack=False):
     ## General arguments
     parser.add_argument('--dataset', default='cifar10', choices=['cifar10', 'mnist'],
                         help='define torch dataset to train on (def. none)')
-    parser.add_argument('--root', default=None, type=str,
-                        help='path that dataset\'s test/ train/ folders are stored (def. `./data/`)')
+    parser.add_argument('--root', default="./data/", type=str,
+                        help='path that dataset\'s test/ train/ folders are stored (def. `../data/`)')
     # Filter
     parser.add_argument('--filter', default=None, choices=['high', 'low', 'band'],
                         help='filter dataset images in frequency space (def. none)')

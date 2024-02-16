@@ -87,38 +87,35 @@ def show_image_function(classes, folder):
         def set_axis_style(ax):
             ax.xaxis.set_visible(False)
             ax.yaxis.set_visible(False)
-
+            ax.axis('off')
 
         ncols = 3 if with_perturb else 2
-        fig, ax = plt.subplots(nrows=1,ncols=ncols, dpi=300)
+        fig, ax = plt.subplots(nrows=1,ncols=ncols, figsize=(10, 8))
         plt.rc('font', family='serif')
 
         set_axis_style(ax[0])
         set_axis_style(ax[2 if with_perturb else 1])
-
-        # if l2:
-        #     fig.suptitle(f'L2 distance: {l2:.5f}', fontsize=16)
 
         adv_img, target = adv_img
         img, label = img
         npimgs = img_pipeline([img, adv_img])
         kwargs = img.size()[0]==1 and {'cmap': 'gray'} or {}
 
-        ax[0].set_title("%s"%classes[label])
+        ax[0].set_title("%s"%classes[label], fontsize=9)
         ax[0].imshow(np.transpose(npimgs[0], (1, 2, 0)), **kwargs)
-        ax[2 if with_perturb else 1].set_title("%s"%classes[target])
+        ax[2 if with_perturb else 1].set_title("%s"%classes[target], fontsize=9)
         ax[2 if with_perturb else 1].imshow(np.transpose(npimgs[1], (1, 2, 0)), **kwargs)
 
         if with_perturb:
             set_axis_style(ax[1])
             perturb = npimgs[1] - npimgs[0]
             perturb = ToValidImg(perturb)
-            ax[1].set_title("Perturbation")
+            ax[1].set_title("$\delta,  \|{\delta}\|_2="+f"{l2:.2f}$", fontsize=9)
             ax[1].imshow(np.transpose(perturb, (1, 2, 0)), **kwargs)
 
         if not os.path.isdir(folder):
             os.makedirs(folder)
-        plt.savefig(f"{folder}sample_{idx}_{classes[target]}.svg", bbox_inches='tight')
+        plt.savefig(f"{folder}sample_{idx}_{classes[target]}.svg")
         plt.show()
     return show_image
 
@@ -132,20 +129,12 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
         Grid has NxM images.
         Saved in ./advimages/grid as .svg.
     '''
-    def set_axis_style(ax):
-        ax.xaxis.set_label_position('top')
-        ax.xaxis.set_ticklabels([])
-        ax.xaxis.set_ticks([])
-        ax.yaxis.set_ticklabels([])
-        ax.yaxis.set_ticks([])
-
     N = len(adv_imgs)
     M = len(adv_imgs[0])
     fig, ax = plt.subplots(nrows=N,ncols=M, figsize=(M,N), dpi=300)
 
     plt.rcParams["font.family"] = "serif"
 
-    xy_style = [set_axis_style(ax[i][j]) for i in range(N) for j in range(M)]
     for c in range(M):
         ax[0][c].set_xlabel(classes[c])
 
@@ -171,7 +160,7 @@ def show_in_grid(adv_imgs, classes, fname='', **kwargs):
     plt.savefig(f"{path}/{fname}.svg",bbox_inches='tight')
 
 
-def modified_frequencies(x_ben, x_adv, **kwargs):
+def modified_frequencies(x_ben, x_adv):
     '''
         Expects `x_ben`, `x_adv` in shape (<N,> C, H, W).
         Plots spectral l1-difference between each x_ben and x_adv image.
@@ -205,7 +194,7 @@ def modified_frequencies(x_ben, x_adv, **kwargs):
     plt.show()
 
 
-def imshow_all_subimg(input, adv, model, classes):
+def imshow_all_subimg(input, adv, model):
     '''
     Plots original(input) and adversarial images
     as well as their spectrum and perturbation.

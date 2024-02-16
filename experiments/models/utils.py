@@ -151,6 +151,7 @@ def train(
         iters = []
         losses = 0
         start_time = time.time()
+        i = 0
         for i, batch in enumerate(trainloader, 0):
             total_inputs += batch[0].size(0)
             data = batch[0].to(device)
@@ -167,7 +168,7 @@ def train(
         epoch_time = time.time()-start_time
         loss_p_epoch.append(losses/(i+1))
         if verbose:
-            print("=> [EPOCH %d] LOSS = %.4f, LR = %.4f, TIME = %.4f mins"%
+            print("=> [EPOCH %d] LOSS = %.4f, LR = %.6f, TIME = %.4f mins"%
             (epoch, loss_p_epoch[-1], optimizer.param_groups[0]["lr"], epoch_time/60))
         if valloader:
             val_loss = validate_model(model, valloader, device)
@@ -212,6 +213,13 @@ def calc_accuracy(model, testloader):
     accuracy = float(accuracy/total)
     return accuracy
 
+def check_correct_class(image_b, label_b, model):
+    device = next(model.parameters()).device
+    scores = model(image_b.to(device)).detach().cpu()
+    prediction = torch.argmax(scores, dim=1)
+    return prediction == label_b
+
+
 def validate_model(model, valloader, device):
     model.eval()
     loss = 0
@@ -221,7 +229,7 @@ def validate_model(model, valloader, device):
     model.train()
     return loss/(i+1)
 
-def write_train_output(model, model_name, accuracy, **kwargs):
+def write_train_output(model_name, accuracy, **kwargs):
     f = open(train_fname, 'a')
     outputf = dict(file=f)
     print("<==>", **outputf)
@@ -232,7 +240,7 @@ def write_train_output(model, model_name, accuracy, **kwargs):
     print("Test accuracy: %.2f"%(accuracy*100),"%", **outputf)
     print("=><=", **outputf)
 
-def learning_curve(iters, losses, val_losses, epoch, lr, batch_size, filename):
+def learning_curve(iters, losses, val_losses, filename):
     plt.rcParams["font.family"] = "serif"
     plt.xlabel("Iterations")
     plt.ylabel("Loss")
@@ -267,7 +275,7 @@ def debug_activations(model, layer):
 
 ## !UNDER CONSTRUCTION! ##
 
-def tSNE(model, model_class, dataloader, labels, classes):
+def tSNE(model, dataloader, classes):
     '''
     Run t-SNE on model's classification layer for given inputs.
     This plots the distribution of the output for data from different classes,

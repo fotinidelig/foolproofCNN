@@ -8,7 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from typing import Optional
-from torchvision.models import resnet18, resnet34, resnet50, resnet101, efficientnet_b0, googlenet
+from torchvision.models import resnet18, resnet34, resnet50, resnet101, efficientnet_b0, \
+        googlenet
 
 ## Remember to use GPU for training and move dataset & model to GPU memory
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -148,19 +149,22 @@ class WideResNet(BasicModel):
 
 ## Load ResNet-[18,34,50,101]
 def resnet_model(layers=18, classes=200, pretrained=True, grads=True):
+    assert layers in [18, 34, 50, 101], f"Available ResNet models have layers in [18, 34, 50, 101]."
     if layers == 18:
         resnet = resnet18
     elif layers == 34:
         resnet = resnet34
     elif layers == 50:
         resnet = resnet50
-    elif layers == 101:
+    else:
         resnet = resnet101
     model = resnet(pretrained=pretrained)
     if pretrained and not grads:
         for param in model.parameters():
             param.requires_grad = False
-    model.fc = nn.Linear(512, out_features=classes, bias=True)
+
+    in_features = model.fc.in_features
+    model.fc = nn.Linear(in_features, out_features=classes, bias=True)
     if verbose:
         print("\n", model)
     return model
@@ -187,11 +191,10 @@ def googlenet_model(classes=200, pretrained=True, grads=True):
     return model
 
 def finetune_params(model):
-    params_to_update = model.parameters()
     print("Params to learn:")
     params_to_update = []
     for name,param in model.named_parameters():
-        if param.requires_grad == True:
+        if param.requires_grad:
             params_to_update.append(param)
             print("\t",name)
     return params_to_update

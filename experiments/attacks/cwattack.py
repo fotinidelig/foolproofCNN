@@ -30,11 +30,12 @@ def loss(
     Calculating the loss with f_6 objective function,
     refer to the paper for details
     """
+    device = input.device
     N = input.size(0)
-    max_ = torch.tensor([0]*N)
+    max_ = torch.tensor([0]*N).to(device)
     f_i = torch.stack([
-    max([logits[i][j] for j in range(len(logits[0])) if j != target[i]]) for i in range(N)
-    ])
+        max([logits[i][j] for j in range(len(logits[0])) if j != target[i]]) for i in range(N)
+    ]).to(device)
     f_t =  torch.stack([logits[i][target[i]] for i in range(N)])
     fx = (f_i - f_t) if targeted else (f_t - f_i) + conf
     obj = torch.max(fx, max_)
@@ -86,12 +87,7 @@ def cwattack(
         return const_i, max_const_i, min_const_i, end_iters
 
     N = x.size(0)
-    use_gpu()
-
-    adv_samples = []
-    adv_targets = []
-    l2_distances = []
-    const_vals = []
+    device = x.device
     indices = []
 
     # calculations to constrain tanh() within [BOXMIN, BOXMAX]
@@ -101,21 +97,20 @@ def cwattack(
     if not targeted:
         target, _ = predict(model, x)
 
-    max_const_n = torch.tensor([max_const]*N).float()
-    min_const_n = torch.tensor([min_const]*N).float()
-    const_n = torch.tensor([init_const]*N).float()
-    w_n = torch.zeros_like(x).requires_grad_(True).float() # init
+    max_const_n = torch.tensor([max_const]*N, device=device).float()
+    min_const_n = torch.tensor([min_const]*N, device=device).float()
+    const_n = torch.tensor([init_const]*N, device=device).float()
 
     found_atck_n = [False]*N
     best_atck_n = x.clone().detach()
-    best_l2_n = torch.full((N,), np.inf)
-    best_const_n = torch.zeros(N)
-    best_w_n = torch.zeros_like(x)
+    best_l2_n = torch.full((N,), np.inf, device=device)
+    best_const_n = torch.zeros(N, device=device)
+    best_w_n = torch.zeros_like(x, device=device)
 
-    eps = torch.tensor(np.random.uniform(-0.02, 0.02, x.shape)) # random noise in range [-0.03, 0.03]
+    eps = torch.tensor(np.random.uniform(-0.02, 0.02, x.shape), device=device) # random noise in range [-0.03, 0.03]
     input = (x+eps).clamp(min=x_min, max=x_max) # control for arctanh NaN values
-    inv_input = torch.atanh((input-TO_ADD)/TO_MUL)
-    w_n = (inv_input).clone().detach().requires_grad_(True)
+    inv_input = torch.atanh((input-TO_ADD)/TO_MUL).to(device)
+    w_n = inv_input.clone().detach().requires_grad_(True).to(device)
 
     for _ in range(bin_steps):
         params = [{'params': w_n}]
@@ -131,23 +126,23 @@ def cwattack(
             optimizer.zero_grad()
 
             # update best results
-            for i in range(N):
-                if fx_n[i] < 0:
-                    cur_fx_n[i] = fx_n[i]
-                    found_atck_n[i] = True
+            for k in range(N):
+                if fx_n[k] < 0:
+                    cur_fx_n[k] = fx_n[k]
+                    found_atck_n[k] = True
                     if i not in indices:
                         indices.append(i)
-                    l2_i = torch.norm(adv_n[i] - x[i])
-                    if l2_i < best_l2_n[i]:
-                        best_l2_n[i]  = l2_i
-                        best_atck_n[i] = adv_n[i].detach().clone()
-                        best_const_n[i] = const_n[i].clone()
-                        best_w_n[i] = w_n[i].clone().detach()
+                    l2_i = torch.norm(adv_n[k] - x[k])
+                    if l2_i < best_l2_n[k]:
+                        best_l2_n[k]  = l2_i
+                        best_atck_n[k] = adv_n[k].detach().clone()
+                        best_const_n[k] = const_n[k].clone()
+                        best_w_n[k] = w_n[k].clone().detach()
 
         # update parameters
         w_n = w_n.clone().detach()
         if random_init:
-            eps.data = torch.tensor(np.random.uniform(-0.02, 0.02, w_n.shape))
+            eps.data = torch.tensor(np.random.uniform(-0.02, 0.02, w_n.shape), device=device)
         else:
             eps.data = torch.zeros_like(w_n)
         for i in range(N):
@@ -172,11 +167,8 @@ def cw_attack_all(
         targeted,
         dataset,
         classes,
-        save_attacks = False,
-        class_pairs = None,
         **kwargs
     ):
-    use_gpu()
     device = next(model.parameters()).device
     folder = 'advimages/targeted/cw/' if targeted else 'advimages/untargeted/cw/'
     show_image = show_image_function(classes, folder)
@@ -209,9 +201,6 @@ def cw_attack_all(
                 unique_idx = int(i + cnt_all - len(output) + target) # index of image across all batches + attack label
                 show_image(unique_idx, (output[i], target), (inputs[i], labels[i]),
                         l2=vals[1][i], with_perturb=True)
-                if class_pairs:
-                    # save true and target label pairs in dict
-                    class_pairs[str(int(labels[i]))][str(int(target))] += 1
 
         print("\n=> Attack took %f mins"%(batch_time/60))
         print(f"Found attack for {cnt}/{len(output)} samples.")

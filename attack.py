@@ -9,7 +9,7 @@ from experiments.attacks.cwattack import cw_attack_all
 from experiments.attacks.boundary_attack_wrapper import boundary_attack_all
 from experiments.attacks.pgd import pgd_attack_all
 from experiments.attacks.utils import modified_frequencies, equal_samples
-from experiments.utils import load_wrap, load_model
+from experiments.utils import load_data_wrapper, load_model
 from experiments.parser import parser
 
 ## DEBUG
@@ -34,7 +34,6 @@ def main():
     ############
 
     args = parser(train=False, attack=True)
-    threshold = (*[int(val) for val in args.threshold.split(',')],) if args.threshold else None
     input_size = (*[int(val) for val in args.input_size.split(',')],)
     output_size = (*[int(val) for val in args.output_size.split(',')],) if args.output_size else None
 
@@ -50,9 +49,9 @@ def main():
     ##################
 
 
-    trainset, trainloader, testset, testloader = load_wrap(BATCH_SIZE, args.root, args.dataset, args.model,
-                                                            False, None, None, input_size=input_size,
-                                                            output_size=output_size)
+    trainset, trainloader, testset, testloader = load_data_wrapper(BATCH_SIZE, args.root, args.dataset,
+                                                                   False, input_size=input_size,
+                                                                   output_size=output_size)
 
     ###########
     ## Model ##
@@ -89,7 +88,7 @@ def main():
         norm = 2 if args.norm == '2' else np.inf
         atck_args = dict(eps=args.epsilon, alpha=args.alpha,
                         n_iters=args.iters, x_min=-.5, x_max=.5, norm=norm)
-    elif args.attack == 'boundary':
+    else:
         attack_func = boundary_attack_all
         atck_args = dict(steps=1000)
 

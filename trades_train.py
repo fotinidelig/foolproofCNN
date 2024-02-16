@@ -8,7 +8,7 @@ import os
 # import experiments
 from experiments.models.utils import write_train_output, calc_accuracy
 from experiments.defences.trades import train_trades
-from experiments.utils import load_wrap, load_model
+from experiments.utils import load_data_wrapper, load_model
 from experiments.parser import parser
 
 import torch
@@ -38,10 +38,10 @@ def main():
     ## Load Dataset ##
     ##################
 
-    trainset, trainloader, testset, testloader, validloader = load_wrap(BATCH_SIZE, args.root, args.dataset,
-                                                            args.model, args.augment, args.filter, threshold,
-                                                            input_size=input_size, output_size=output_size,
-                                                            validation=True)
+    trainset, trainloader, testset, testloader, validloader = load_data_wrapper(BATCH_SIZE, args.root, args.dataset,
+                                                                                args.augment,
+                                                                                input_size=input_size, output_size=output_size,
+                                                                                validation=True)
     ###########
     ## Train ##
     ###########

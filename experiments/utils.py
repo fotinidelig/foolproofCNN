@@ -23,6 +23,7 @@ def filtering(filter, threshold):
                         and threshold must be tuple (a, b) if filter=="band"''')
     return FourierFilter(filter, threshold)
 
+#TODO: fix load_data to load only one dataset form the root directory, or the dataclass. Take care of the validation set.
 def load_data(
     dataclass=None,
     root='./data',
@@ -50,28 +51,28 @@ def load_data(
     print("Augmentation:", augment)
     print("Filtering:",filter,threshold)
 
-    if empirical_norm: # only for CIFAR10 and (Tiny) ImageNet
+    if empirical_norm:
         normalize = T.Normalize(mean=[0.485, 0.456, 0.406],
                                 std=[0.229, 0.224, 0.225])
     else:
-        mean = (.5,.5,.5) if dataclass != MNIST else (.5)
-        std = (1,1,1) if dataclass != MNIST else (1)
+        mean = (.5,.5,.5) if dataclass != MNIST else (.5,)
+        std = (1,1,1) if dataclass != MNIST else (1,)
         normalize = T.Normalize(mean, std)
 
     filterT = filtering(filter, threshold) if filter else T.Lambda(lambda t: t)
 
-    downsize = T.Resize(output_size) if output_size else T.Lambda(lambda t: t)
+    resize = T.Resize(output_size) if output_size else T.Lambda(lambda t: t)
     output_size = output_size if output_size else input_size
 
-    transform_test = T.Compose([T.ToTensor(), normalize, downsize])
-    transform_standard = T.Compose([T.ToTensor(), normalize, downsize, filterT])
+    transform_test = T.Compose([T.ToTensor(), normalize, resize])
+    transform_standard = T.Compose([T.ToTensor(), normalize, resize, filterT])
     transform_augment = T.Compose([
             T.ToTensor(),
             normalize,
-            downsize,
+            resize,
             filterT,
             T.Pad(4, padding_mode='reflect'),
-            T.RandomCrop(max(output_size)),
+            T.RandomCrop(output_size),
             T.RandomHorizontalFlip()])
 
     # choose augmented or standard train set
@@ -113,90 +114,53 @@ def load_data(
     return trainset, trainloader, testset, testloader
 
 
-def load_wrap(batch_size, root, dataset, model, augment, filter, threshold, **kwargs):
+def load_data_wrapper(batch_size, root, dataset, augment, **kwargs):
     '''
     Wrapper for loading the dataset
     according to runtime configurations.
     '''
+    if root is None and dataset not in ['cifar10', 'mnist']:
+        return RuntimeError("You need to speficy a root data directory or "
+                            "one of ['cifar10', 'mnist'] datasets.")
+
     if root:
         print(f"=> Loading dataset from path {root}")
         vals = load_data(None, root=root, batch_size=batch_size,
-                                                 augment=augment, filter=filter, threshold=threshold, **kwargs)
-    else:
-        if dataset == 'cifar10':
-            print("=> Loading CIFAR10 dataset")
-            vals = load_data(CIFAR10, root='./data', batch_size=batch_size,
-                                                 augment=augment, filter=filter, threshold=threshold, **kwargs)
-        if dataset == 'mnist' or model =='cwmnist':
-            print("=> Loading MNIST dataset")
-            vals = load_data(MNIST, root='./data', batch_size=batch_size,
-                                                 augment=augment, filter=filter, threshold=threshold, **kwargs)
+                                                 augment=augment, **kwargs)
+        return vals
+
+    if dataset == 'cifar10':
+        print("=> Loading CIFAR10 dataset")
+        vals = load_data(CIFAR10, root='./data', batch_size=batch_size,
+                                             augment=augment, **kwargs)
+    if dataset == 'mnist':
+        print("=> Loading MNIST dataset")
+        vals = load_data(MNIST, root='./data', batch_size=batch_size,
+                                             augment=augment, **kwargs)
     return vals
 
-def load_model(model, classes, args):
+
+def load_model(model_arch, classes, transfer_learn=True, **args):
     '''
     Wrapper for loading the model architecture
     according to runtime configurations.
     '''
-    transfer_learn = True
-    if 'transfer_learn' not in args and 'attack' not in args:
-        transfer_learn = False
 
-    if model == "cwcifar10":
+    if model_arch == "cwcifar10":
         model = CWCIFAR10()
-    elif model == "cwmnist":
+    elif model_arch == "cwmnist":
         model = CWMNIST()
-    elif model == "wideresnet":
-        model = WideResNet(i_channels=3, depth=args.depth, width=args.width)
-    elif model == "resnet":
-        model = resnet_model(args.layers, classes, transfer_learn, True)
-    elif model == "effnet":
+    elif model_arch == "wideresnet":
+        model = WideResNet(i_channels=3, depth=args["depth"], width=args["width"])
+    elif model_arch == "resnet":
+        model = resnet_model(args["layers"], classes, transfer_learn, True)
+    elif model_arch == "effnet":
         model = effnet_model(classes, transfer_learn, True)
-    elif model == "googlenet":
+    elif model_arch == "googlenet":
         model = googlenet_model(classes, transfer_learn, True)
-    if not args.model_name:
+    if not 'model_name' in args.keys():
         model_name = model.__class__.__name__
     else:
-        model_name = args.model_name
+        model_name = args['model_name']
     print(f"Model Name: {model_name}")
-    # summary(model,(128,3,32,32), depth=1,
-    #         col_names=["output_size","kernel_size"])
     return model, model_name
-
-## Not frequenctly used ##
-
-def x_max_min(loader):
-    '''
-        Calculate max & min of dataset after
-        mormalization transform is applied.
-
-        Transform should be:
-        [T.transform_X, T.Normalize(mean std), ...]
-    '''
-    mean = loader.dataset.transform.transforms[1].mean
-    std = loader.dataset.transform.transforms[1].std
-
-    x_max = np.array([1.,1.,1.])
-    x_max = (x_max-mean)/std
-    x_max = x_max.max()
-
-    x_min = np.array([0,0,0])
-    x_min = (x_min-mean)/std
-    x_min = x_min.min()
-
-    print(f"Max: {x_max} Min: {x_min}")
-    return x_max, x_min
-
-
-def normalize(data: torch.tensor):
-    '''
-        Calculates mean and std of a dataset
-        for each channel, and returns
-        a normalization transformation.
-    '''
-    dims = (0,1,2) if len(data.shape) == 3 else 0
-    mean = data.float().mean(dims)
-    std =  data.float().std(dims)
-    return T.Normalize((*mean,), (*std,))
-
-####

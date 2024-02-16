@@ -10,7 +10,7 @@ Implemented with PyTorch.
 <!-- |Albatross||Tit mouse| -->
 
 
-## About me
+## About this repo
 
 **Datasets used:**
 - [*CIFAR-10*](https://www.cs.toronto.edu/~kriz/cifar.html)
@@ -27,18 +27,18 @@ Implemented with PyTorch.
 **Defences implemented from scratch:**
 - *TRADES*: [H. Zhang, Y. Yu, J. Jiao, E. P. Xing, L. El Ghaoui and M. I. Jordan, "Theoretically Principled Trade-off between Robustness and Accuracy" 2019 International Conference on Machine Learning, 2019.](https://arxiv.org/pdf/1901.08573.pdf)
 
-## How to use me
-*Note*: All attack methods and defences (and all consequent functions) can be used on their own as a tool, simply by importing the correct python modules.
+## How to use this repo
+*Note*: All attack methods and defences (and all consequent functions) can be used on their own as a tool by importing the respective python modules.
 
 **General arguments:** 
 `--model_name` specifies where to store or to load from a model.
 
 `--model` sets the model architecture and might need some other parameters.
 
-`--dataset` and `root` are used to choose either a pre-existing `torch` dataset or to specify the root directory of the image data.
+`--dataset` and `root` are used to choose either a pre-existing PyTorch dataset or to specify the root directory of the image data.
 
 
-**Training a model - train.py**
+### **Training a model - `train.py`**
 
 At runtime you can train the model of your choice and add optional arguments.
 
@@ -59,7 +59,7 @@ usage: train.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
 ```
 
 
-**Running an attack - attack.py**
+### **Running an attack - `attack.py`**
 
 Here you have various optional arguments for the target model or attack method.
 
@@ -81,7 +81,7 @@ usage: attack.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
 ```
 
 
-**Training with TRADES trades_train.py**
+### **Training with TRADES - `trades_train.py`**
 
 Similar to normal training, with some additional parameters for the TRADES algorithm.
 As an example, try running:
@@ -101,7 +101,7 @@ usage: trades_train.py [-h] [--dataset {cifar10,mnist}] [--root ROOT]
                        [--norm {inf,2}] [--epsilon EPSILON] [--alpha ALPHA]
                        [--iters ITERS]
 ```
-**Configuration files - config[.ini,.py]**
+### **Configuration files - `config.ini`**
 
 Here you can set your global configuration parameters that are used within the project. These can be the log/ouptut file names, folders where you save results and any other parameters you might need.
 
@@ -124,5 +124,3 @@ config.read('config.ini')
 bool_param_val = config.getboolean('general','bool_param_name')
 param_val = config.get('general','param_name')
 ```
-
-## Preliminary experimental results

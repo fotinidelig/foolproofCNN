@@ -5,7 +5,7 @@ import argparse
 import numpy as np
 import time
 
-from experiments.utils import load_wrap, load_model
+from experiments.utils import load_data_wrapper, load_model
 from experiments.parser import parser
 from experiments.models.utils import *
 
@@ -43,10 +43,10 @@ def main():
     ## Load Dataset ##
     ##################
 
-    trainset, trainloader, testset, testloader, validloader = load_wrap(BATCH_SIZE, args.root, args.dataset,
-                                                            args.model, args.augment, args.filter, threshold,
-                                                            input_size=input_size, output_size=output_size,
-                                                            validation=True)
+    trainset, trainloader, testset, testloader, validloader = load_data_wrapper(BATCH_SIZE, args.root, args.dataset,
+                                                                                args.augment,
+                                                                                input_size=input_size, output_size=output_size,
+                                                                                validation=True)
     ###########
     ## Train ##
     ###########
@@ -89,9 +89,9 @@ def main():
     ## Only when filter is applied
     ## test accuracy on filtered test set
     if args.threshold:
-        _, _, _, filtered_testloader = load_wrap(BATCH_SIZE, args.root, args.dataset, args.model,
-                                                    args.augment, args.filter, threshold, filter_test=True,
-                                                    input_size=input_size, output_size=output_size)
+        _, _, _, filtered_testloader = load_data_wrapper(BATCH_SIZE, args.root, args.dataset,
+                                                         args.augment, filter_test=True,
+                                                         input_size=input_size, output_size=output_size)
 
         accuracy_filtered = calc_accuracy(model, filtered_testloader)
         out_args['filter'] = f"{args.filter}, threshold: {threshold}"
@@ -105,7 +105,7 @@ def main():
         f.write(f"{threshold}, {accuracy}\n")
         f.close()
 
-    write_train_output(model, model_name, accuracy, **out_args)
+    write_train_output(model_name, accuracy, **out_args)
 
 if __name__ == "__main__":
     main()
